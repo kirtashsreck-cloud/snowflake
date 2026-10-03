@@ -1,20 +1,18 @@
 /* ==========================================================
    COPO DE NIEVE — Planificador de novelas
-   Un solo archivo JS. Vanilla. Sin dependencias.
+   PARTE 1/2: constantes, estado, migración, navegación,
+              pasos generales y personajes.
+   Pega la PARTE 2 a continuación, en el mismo archivo.
    ========================================================== */
 
 /* ----------------------------------------------------------
-   1. CONSTANTES: pasos del método y ejemplos
+   1. CONSTANTES: pasos del método, categorías, ayudas, ejemplos
    ---------------------------------------------------------- */
 
 const STEPS = [
-  { id: 'publico', num: 0, title: 'Público objetivo', short: 'Público',
-    desc: 'Antes de empezar: define categoría, tipo de historia y por qué encantará a tu público.',
-    fields: [
-      { key: 'categoria', label: 'Mi categoría es', type: 'text', ph: 'Ej: thriller, fantasía épica, romance contemporáneo...' },
-      { key: 'tipo',      label: 'Este es el tipo de historia que quiero escribir', type: 'textarea', ph: 'Ej: un thriller psicológico con una protagonista poco fiable...' },
-      { key: 'porque',    label: 'Este tipo de historia encantará a mi público objetivo porque', type: 'textarea', ph: 'Ej: buscan tensión creciente, giros inesperados y dilemas morales...' }
-    ]
+  { id: 'publico', num: 0, title: 'Público objetivo y premisa', short: '0. Base',
+    desc: 'Antes de empezar: define a quién va dirigida tu novela y cuál es la premisa, el tema y el crisol general de la historia.',
+    type: 'publico'
   },
   { id: 'p1', num: 1, title: 'Resumen de una sola frase', short: '1. Una frase',
     desc: 'Una frase de menos de 25 palabras que resuma tu novela. Céntrate en 1-2 personajes y su objetivo. No reveles el final.',
@@ -33,7 +31,7 @@ const STEPS = [
     ]
   },
   { id: 'p3', num: 3, title: 'Hojas de personajes', short: '3. Personajes',
-    desc: 'Ficha breve por personaje: rol, nombre, objetivo, ambición, valores, conflicto, epifanía y resúmenes.',
+    desc: 'Ficha breve por personaje: rol, objetivo, ambición, valores, conflicto, epifanía y resúmenes.',
     type: 'characters', mode: 'short'
   },
   { id: 'p4', num: 4, title: 'Sinopsis breve (una página)', short: '4. Sinopsis breve',
@@ -56,13 +54,13 @@ const STEPS = [
     desc: 'Ficha detallada por personaje: información física, personalidad, entorno y psicología.',
     type: 'characters', mode: 'bible'
   },
-  { id: 'p8', num: 8, title: 'Lista de escenas', short: '8. Lista',
-    desc: 'Vista panorámica: todas las escenas en una tabla, con POV, tipo, estado y un resumen breve. Para ver la historia completa de un vistazo y reordenar.',
-    type: 'scenes', mode: 'list'
-  },
-  { id: 'p9', num: 9, title: 'Plan de escenas', short: '9. Plan',
+  { id: 'p8', num: 8, title: 'Plan de escenas', short: '8. Plan',
     desc: 'Zoom sobre cada escena: meta / conflicto / revés (proactiva) o reacción / dilema / decisión (reactiva). Verificador incluido.',
     type: 'scenes', mode: 'plan'
+  },
+  { id: 'p9', num: 9, title: 'Lista de escenas', short: '9. Lista',
+    desc: 'Vista panorámica: todas las escenas en una tabla, con POV, tipo, estado y un resumen breve.',
+    type: 'scenes', mode: 'list'
   },
   { id: 'p10', num: 10, title: 'Escribir la novela', short: '10. Escribir',
     desc: 'Ya tienes la estructura completa. Empieza a escribir.',
@@ -70,11 +68,23 @@ const STEPS = [
   }
 ];
 
-/* Ayudas y definiciones por campo (tomadas de "escena explosiva" de Ingermanson) */
+const CHARACTER_CATEGORIES = [
+  { id: 'protagonist', label: 'Protagonistas' },
+  { id: 'main',        label: 'Principales' },
+  { id: 'secondary',   label: 'Secundarios' },
+  { id: 'other',       label: 'Otros' }
+];
+
 const FIELD_HELP = {
+  /* Paso 0 */
   categoria: 'El género o categoría comercial de tu novela. Define a qué estantería pertenece y a qué lectores va dirigida.',
   tipo: 'El tipo concreto de historia dentro de la categoría. Cuanto más específico, mejor sabrás a quién le va a encantar.',
   porque: 'Razón por la que tu público objetivo disfrutará esta historia. Piensa en qué busca ese lector cuando compra un libro como el tuyo.',
+  premisa: 'La situación inicial en una frase. Quién es el protagonista y qué se le presenta al principio de la historia. Es la chispa que enciende la trama.',
+  tema: 'La idea central. De qué trata realmente la historia, más allá de la trama. La verdad humana que late debajo. Ej: "el precio de la ambición", "la búsqueda de identidad", "el perdón como liberación".',
+  crisolGeneral: 'Todo lo que conspira para arruinar la vida del protagonista a lo largo de toda la novela. Combina el mundo de la historia, su trayectoria vital y las historias de los demás personajes. El crisol general es lo que hace que la historia merezca la pena leerse. Si no puedes decir cuál es el crisol general, la historia no tiene motor.',
+
+  /* Pasos generales */
   frase: 'Menos de 25 palabras. Céntrate en uno o dos personajes y describe su objetivo en la historia. No reveles el final. Es una herramienta de marketing para despertar curiosidad.',
   frase1: 'Escenario y contexto. Presenta a uno o dos personajes principales. Dónde estamos, cuándo, quiénes.',
   frase2: 'Resume el Acto 1, que culmina con el primer desastre. Ese desastre obliga al protagonista a comprometerse con la historia.',
@@ -83,8 +93,8 @@ const FIELD_HELP = {
   frase5: 'Resume el Acto 3, con el enfrentamiento final y el desenlace. El protagonista triunfa o fracasa.',
   sinopsis: 'Amplía cada frase del párrafo a un párrafo completo. Aquí puedes desarrollar detalles, subtramas y matices sin perder la estructura.',
 
+  /* Campos de personaje */
   rol: 'El papel que cumple en la historia: héroe, heroína, villano, mentor, compañero, aliado, etc.',
-  nombre: 'Nombre del personaje.',
   objetivo: 'Lo que quiere conseguir en esta historia. Concreto, medible, alcanzable o no dentro de la trama.',
   ambicion: 'Lo que quiere en la vida, de forma abstracta. Suele ser más grande que el objetivo y da sentido a sus actos.',
   valores: 'Varias frases que empiezan con "Nada es más importante que...". Definen qué prioriza el personaje cuando tiene que elegir.',
@@ -93,22 +103,23 @@ const FIELD_HELP = {
   resumen1: 'La historia personal de este personaje en una frase.',
   resumenP: 'La estructura en tres actos de la historia personal de este personaje, en un párrafo.',
 
+  /* Campos de escena */
   title: 'Un título breve para identificar la escena internamente. No aparecerá en la novela.',
   pov: 'El personaje desde cuyo punto de vista se narra esta escena. Regla práctica: quien más tiene que perder en la escena suele ser un buen POV.',
   summary: 'Qué ocurre en la escena en una o dos frases. Es la vista panorámica, lo que anotarías en una lista de escenas.',
   crisol: 'La razón por la que el personaje no puede conseguir lo que desea en esta escena. Combina el mundo de la historia, los otros personajes y las limitaciones internas del POV. Dura exactamente lo que dura la escena. Si no puedes decir cuál es el crisol, la escena está rota.',
   meta: 'Lo que el POV quiere conseguir al final de la escena. Debe ser concreto y objetivo (que se pueda fotografiar), posible, difícil y coherente con sus valores y ambición. Cuanto antes se establezca en la escena, mejor.',
-  conflicto: 'Resistencia a la búsqueda del objetivo. Puede venir del entorno, de otros personajes o de contradicciones internas del POV. El patrón: el personaje intenta algo, algo lo bloquea, repite. La tensión debe subir.',
   reves: 'Una derrota para el protagonista de la historia (no necesariamente para el POV). Al final de la escena, el personaje queda peor que al principio. A veces puede ser una victoria, pero se busca el revés para empujar al lector a la siguiente página.',
   reaccion: 'Principalmente emocional. Muestra las emociones del POV, no las nombres. Debe ser coherente con su personalidad, sus valores y su ambición, y proporcional al revés que la provocó.',
   dilema: 'No emocional, sino intelectual. El personaje considera varios planes de acción, todos malos, y busca el menos malo. Puede mostrarse como razonamiento, como escucha de un consejo, o como acción física mientras su subconsciente trabaja.',
   decision: 'La resolución del dilema. No es buena, es la menos mala. Es fuerte cuando limita las opciones del oponente, cuando sirve como meta para una escena proactiva futura, cuando reconoce el riesgo, y cuando es un compromiso firme. No es decisión hasta que el personaje se compromete.',
-  notes: 'Notas libres para ti: fragmentos de diálogo, imágenes, referencias, cosas a recordar al escribir la escena.'
+  notes: 'Notas libres para ti: fragmentos de diálogo, imágenes, referencias, cosas a recordar al escribir la escena.',
+  location: 'Lugar donde transcurre la escena. Opcional. Puede ser tan concreto o tan vago como quieras.',
+  charactersInScene: 'Otros personajes que aparecen en la escena además del POV. Opcional.'
 };
 
 const SHORT_CHAR_FIELDS = [
   { key: 'rol',       label: 'Rol', type: 'text', ph: 'Héroe, villano, mentor, compañero...' },
-  { key: 'nombre',    label: 'Nombre', type: 'text' },
   { key: 'objetivo',  label: 'Objetivo', type: 'textarea', ph: 'Lo que quiere conseguir en esta historia (concreto).' },
   { key: 'ambicion',  label: 'Ambición', type: 'textarea', ph: 'Lo que quiere en la vida (abstracto).' },
   { key: 'valores',   label: 'Valores', type: 'textarea', ph: '"Nada es más importante que..." (varias líneas)' },
@@ -159,16 +170,16 @@ const SCENE_STATES = [
 ];
 
 const EXAMPLES = {
-  publico: 'Categoría: Parábola empresarial\n\nTipo: Un escritor de ficción quiere escribir una novela pero no sabe por dónde empezar.\n\nPúblico: Escritores de ficción que quieren aprender el método del copo de nieve.',
+  publico: 'Público objetivo\n\nCategoría: Parábola empresarial\n\nTipo: Un escritor de ficción quiere escribir una novela pero no sabe por dónde empezar.\n\nPúblico: Escritores de ficción que quieren aprender el método del copo de nieve.\n\n---\n\nPremisa: Una mujer joven que siempre quiso ser novelista asiste a una conferencia de escritura para aprender a planificar su primera novela, pero descubre que la única forma de avanzar es enfrentarse a sus propios miedos.\n\nTema: El valor de confiar en los propios instintos frente a la opinión de los demás.\n\nCrisol general: Ricitos de Oro quiere escribir una novela, pero todo conspira para impedírselo: su familia la convenció de que era "poco práctico", su falta de confianza la paraliza, los métodos de esquematización tradicionales no le funcionan, Cerdito la desanima cada vez que avanza, y su propio miedo a lo que piensen los demás la empuja a dudar de cada decisión.',
   p1: 'Una joven tiene el sueño poco realista de escribir una novela, pero teme que a los demás no les guste lo que escribe.',
   p2: 'Ricitos de Oro siempre había querido escribir una novela, pero toda su familia le decía que era "poco práctico", así que pospuso su sueño hasta que sus hijos empezaran el colegio. Empieza a asistir a clases en una conferencia de escritura, y Osito la invita a probar el Método Copo de Nieve, pero entonces el Lobo Feroz lo mata a sangre fría. Ricitos de Oro empieza a usar el Método Copo de Nieve, pero cuando crea un villano con el que el lector puede empatizar, Cerdito le dice que ha arruinado su historia. Va a comer con el Lobo Feroz y pronto se da cuenta de que es una persona maravillosa con una apariencia dura, y realmente quiere que sea su agente, pero entonces lo arrestan por el asesinato de Cerdito. Ricitos de Oro encuentra las pruebas de su inocencia, y el verdadero asesino intenta matarla, pero ella lo neutraliza con gas pimienta y el Lobo Feroz queda libre.',
-  p3: 'Ricitos de Oro: heroína/villana. Quiere escribir el primer borrador de su novela.\nOsito: mentor. Quiere enseñar a Ricitos de Oro a planificar antes de escribir.\nEl Lobo Feroz: mentor/agente. Quiere encontrar un nuevo novelista al que convertir en estrella.',
+  p3: 'Ricitos de Oro (protagonista): heroína/villana. Quiere escribir el primer borrador de su novela.\nOsito (principal): mentor. Quiere enseñar a Ricitos de Oro a planificar antes de escribir.\nEl Lobo Feroz (principal): agente. Quiere encontrar un nuevo novelista al que convertir en estrella.',
   p4: 'Ricitos de Oro pospone su sueño de escribir una novela hasta que sus hijos empiezan el colegio. Prueba varios métodos de esquematización sin éxito. Descubre el Método Copo de Nieve de Osito, pero cuando mejora a su villano, Cerdito la desanima. Almuerza con el Lobo Feroz, quien resulta ser encantador. Cerdito es asesinado y el Lobo Feroz arrestado. Ricitos de Oro encuentra las pruebas de su inocencia, Cerdito intenta matarla, ella lo neutraliza y el Lobo Feroz queda libre.',
   p5: 'Ricitos de Oro: joven de 30 años que dejó su carrera por la familia y ahora busca algo útil. Su miedo irracional a lo que piensen los demás le impide confiar en sí misma.\nEl Lobo Feroz: agente literario incriminado por asesinato a los 19 años. Lleva una reputación que no merece y busca un talento nuevo.\nCerdito: magnate que quiere comprar la fama literaria sin esfuerzo. Asesinó a sus hermanos y culpó al Lobo.',
   p6: 'Esta historia era demasiado corta como para necesitar una sinopsis larga. La sinopsis breve fue suficiente para crear la lista de escenas.',
   p7: 'Ricitos de Oro: 30 años, 1,65 m, rubia, ojos azules, personalidad "conductor afable". Le encanta leer y escribir thrillers. Casa de tres habitaciones en las afueras. Casada, dos hijos. Su peor recuerdo: perderse en el bosque de niña. Rasgo fuerte: inteligente y enérgica. Rasgo débil: le preocupa lo que piensen los demás.',
-  p8: 'Vista panorámica de las 25 escenas del ejemplo:\n1. Ricitos se bloquea escribiendo.\n2. Clase con Papá Oso (esquema).\n3. Clase con Mamá Osa (orgánico).\n4. Descubre el Copo de Nieve.\n5. Conoce a Osito.\n6. Escribe su frase resumen.\n(... y así hasta 25.)',
-  p9: 'Escena 1 (Ricitos de Oro):\n- Objetivo: escribir su primer capítulo.\n- Conflicto: no sabe cómo empezar.\n- Revés: solo escribe una palabra.\n- Crisol: el miedo a empezar mal.\n\nEscena 2 (Ricitos de Oro, reactiva):\n- Reacción: llora.\n- Dilema: ¿cómo aprender a empezar?\n- Decisión: asistir a una conferencia.',
+  p8: 'Escena 1 (Ricitos de Oro):\n- POV: Ricitos de Oro\n- Lugar: su casa, por la mañana\n- Objetivo: escribir su primer capítulo.\n- Conflicto: no sabe cómo empezar.\n- Revés: solo escribe una palabra.\n- Crisol: el miedo a empezar mal.\n\nEscena 2 (Ricitos de Oro, reactiva):\n- POV: Ricitos de Oro\n- Lugar: su casa\n- Reacción: llora.\n- Dilema: ¿cómo aprender a empezar?\n- Decisión: asistir a una conferencia.',
+  p9: 'Vista panorámica de las 25 escenas del ejemplo:\n1. Ricitos se bloquea escribiendo.\n2. Clase con Papá Oso (esquema).\n3. Clase con Mamá Osa (orgánico).\n4. Descubre el Copo de Nieve.\n5. Conoce a Osito.\n6. Escribe su frase resumen.\n(... y así hasta 25.)',
   p10: 'Ricitos de Oro se sienta a escribir y las palabras fluyen. Sabe que puede terminar su novela.'
 };
 
@@ -198,7 +209,9 @@ const DEFAULT_STATE = () => ({
     openCharId: null,
     draggingSceneId: null,
     helpOpen: {},
-    sidebarCollapsed: false
+    sidebarCollapsed: false,
+    manualPov: {},
+    expandedChars: {}
   },
   versions: []
 });
@@ -209,14 +222,35 @@ let currentBubbleTarget = null;
 let sceneRenderTimer = null;
 
 /* ----------------------------------------------------------
-   3. PERSISTENCIA
+   3. PERSISTENCIA Y MIGRACIÓN
    ---------------------------------------------------------- */
+
+function migrateState(data) {
+  if (Array.isArray(data.characters)) {
+    data.characters.forEach(c => {
+      if (!c.category) c.category = 'main';
+    });
+  }
+  if (Array.isArray(data.scenes)) {
+    data.scenes.forEach(sc => {
+      if (typeof sc.pov === 'string' && sc.pov.trim() && !sc.povName) {
+        sc.povName = sc.pov;
+      }
+      if (!('povId' in sc)) sc.povId = '';
+      if (!('povName' in sc)) sc.povName = '';
+      if (!Array.isArray(sc.charactersInScene)) sc.charactersInScene = [];
+      if (!('location' in sc)) sc.location = '';
+      delete sc.pov;
+    });
+  }
+  return data;
+}
 
 function loadState() {
   try {
     const raw = localStorage.getItem('copoNieve.state');
     if (raw) {
-      const parsed = JSON.parse(raw);
+      const parsed = migrateState(JSON.parse(raw));
       return Object.assign(DEFAULT_STATE(), parsed, {
         settings: Object.assign(DEFAULT_STATE().settings, parsed.settings || {}),
         ui: Object.assign(DEFAULT_STATE().ui, parsed.ui || {})
@@ -285,6 +319,10 @@ function isStepComplete(st) {
   if (st.type === 'characters') return S.characters.length > 0;
   if (st.type === 'scenes') return S.scenes.length > 0;
   if (st.type === 'final') return false;
+  if (st.type === 'publico') {
+    const d = S.steps[st.id] || {};
+    return !!(d.categoria && d.premisa && d.crisolGeneral);
+  }
   const data = S.steps[st.id] || {};
   return st.fields.every(f => (data[f.key] || '').trim().length > 0);
 }
@@ -372,7 +410,9 @@ function renderStepPage(st, inFullView) {
     <p>${st.desc}</p>`;
   page.appendChild(head);
 
-  if (st.type === 'characters') {
+  if (st.type === 'publico') {
+    page.appendChild(renderPublicoSection());
+  } else if (st.type === 'characters') {
     page.appendChild(renderCharactersSection(st.mode));
   } else if (st.type === 'scenes') {
     page.appendChild(renderScenesSection(st.mode));
@@ -401,7 +441,8 @@ function renderStepPage(st, inFullView) {
   return page;
 }
 
-function fieldBlock({ label, key, value, inputHtml, stepIdForHelp, rows }) {
+/* Helper común: bloque de campo con label, "?" y texto de ayuda */
+function fieldBlock({ label, key, value, inputHtml, stepIdForHelp }) {
   const wrap = document.createElement('div');
   wrap.className = 'field';
 
@@ -433,6 +474,87 @@ function fieldBlock({ label, key, value, inputHtml, stepIdForHelp, rows }) {
 
   return wrap;
 }
+
+/* ---------- Paso 0: público objetivo y premisa (dos cards) ---------- */
+
+function renderPublicoSection() {
+  const wrap = document.createElement('div');
+  const data = S.steps.publico || {};
+
+  // Card 1: Público objetivo
+  const card1 = document.createElement('div');
+  card1.className = 'card';
+  const h1 = document.createElement('div');
+  h1.className = 'card-title';
+  h1.textContent = '🎯 Público objetivo';
+  card1.appendChild(h1);
+  const hint1 = document.createElement('div');
+  hint1.className = 'card-hint';
+  hint1.textContent = 'A quién va dirigida tu novela y por qué le va a encantar.';
+  card1.appendChild(hint1);
+
+  [
+    { key: 'categoria', label: 'Mi categoría es', type: 'text', ph: 'Ej: thriller, fantasía épica, romance contemporáneo...' },
+    { key: 'tipo',      label: 'Este es el tipo de historia que quiero escribir', type: 'textarea', ph: 'Ej: un thriller psicológico con una protagonista poco fiable...' },
+    { key: 'porque',    label: 'Este tipo de historia encantará a mi público objetivo porque', type: 'textarea', ph: 'Ej: buscan tensión creciente, giros inesperados y dilemas morales...' }
+  ].forEach(f => {
+    const val = data[f.key] || '';
+    const inputHtml = f.type === 'textarea'
+      ? `<textarea data-step="publico" data-key="${f.key}" rows="3" placeholder="${escapeHtml(f.ph || '')}">${escapeHtml(val)}</textarea>`
+      : `<input type="text" data-step="publico" data-key="${f.key}" value="${escapeHtml(val)}" placeholder="${escapeHtml(f.ph || '')}">`;
+    card1.appendChild(fieldBlock({
+      label: f.label, key: f.key, value: val, inputHtml, stepIdForHelp: 'publico'
+    }));
+  });
+
+  const exBtn1 = document.createElement('button');
+  exBtn1.className = 'btn btn-ghost btn-sm';
+  exBtn1.textContent = '💡 Ver ejemplo';
+  exBtn1.style.marginTop = '8px';
+  exBtn1.onclick = () => showBubbleFor('publico');
+  card1.appendChild(exBtn1);
+
+  // Card 2: Premisa, tema y crisol general
+  const card2 = document.createElement('div');
+  card2.className = 'card';
+  const h2 = document.createElement('div');
+  h2.className = 'card-title';
+  h2.textContent = '🔥 Premisa, tema y crisol general';
+  card2.appendChild(h2);
+  const hint2 = document.createElement('div');
+  hint2.className = 'card-hint';
+  hint2.textContent = 'De qué va la historia, qué trata realmente y qué la obstaculiza.';
+  card2.appendChild(hint2);
+
+  [
+    { key: 'premisa',       label: 'Premisa (situación inicial)',  type: 'textarea', rows: 3, ph: 'Ej: Una mujer que siempre quiso ser novelista asiste a una conferencia para aprender a escribir, pero descubre que su verdadero obstáculo es ella misma.' },
+    { key: 'tema',          label: 'Tema (idea central)',          type: 'textarea', rows: 3, ph: 'Ej: el valor de confiar en los propios instintos frente a la opinión de los demás.' },
+    { key: 'crisolGeneral', label: 'Crisol general de la historia', type: 'textarea', rows: 4, ph: 'Todo lo que conspira para arruinar la vida del protagonista a lo largo de la novela.' }
+  ].forEach(f => {
+    const val = data[f.key] || '';
+    const inputHtml = `<textarea data-step="publico" data-key="${f.key}" rows="${f.rows || 3}" placeholder="${escapeHtml(f.ph || '')}">${escapeHtml(val)}</textarea>`;
+    card2.appendChild(fieldBlock({
+      label: f.label, key: f.key, value: val, inputHtml, stepIdForHelp: 'publico'
+    }));
+  });
+
+  wrap.appendChild(card1);
+  wrap.appendChild(card2);
+
+  // Listener común para los dos cards
+  wrap.addEventListener('input', e => {
+    const el = e.target;
+    if (el.dataset.step !== 'publico') return;
+    if (!S.steps.publico) S.steps.publico = {};
+    S.steps.publico[el.dataset.key] = el.value;
+    markDirty();
+    if (!S.ui.fullView) renderSidebar();
+  });
+
+  return wrap;
+}
+
+/* ---------- Pasos generales (1, 2, 4, 6) ---------- */
 
 function renderFieldsCard(st) {
   const card = document.createElement('div');
@@ -475,28 +597,148 @@ function renderFieldsCard(st) {
 function renderCharactersSection(mode) {
   const wrap = document.createElement('div');
 
-  const tabs = document.createElement('div');
-  tabs.className = 'char-tabs';
-  S.characters.forEach(c => {
-    const t = document.createElement('button');
-    t.className = 'char-tab' + (c.id === S.ui.openCharId ? ' active' : '');
-    t.textContent = c.name || 'Sin nombre';
-    t.onclick = () => { S.ui.openCharId = c.id; autosave(); render(); };
-    tabs.appendChild(t);
-  });
-  const add = document.createElement('button');
-  add.className = 'char-tab add';
-  add.textContent = '+ Añadir personaje';
-  add.onclick = () => {
-    const c = { id: uid(), name: 'Nuevo personaje', short: {}, synopsis: '', bible: {} };
-    S.characters.push(c);
-    S.ui.openCharId = c.id;
-    markDirty();
-    render();
-  };
-  tabs.appendChild(add);
-  wrap.appendChild(tabs);
+  // Botón global "+ Añadir personaje"
+  const topBar = document.createElement('div');
+  topBar.style.marginBottom = '16px';
+  topBar.innerHTML = `<button class="btn btn-primary btn-sm" id="addCharGlobalBtn">+ Añadir personaje</button>`;
+  wrap.appendChild(topBar);
+  setTimeout(() => {
+    const btn = document.getElementById('addCharGlobalBtn');
+    if (btn) btn.onclick = () => addCharacter('main');
+  }, 0);
 
+  // Grupos por categoría
+  const groupsWrap = document.createElement('div');
+  CHARACTER_CATEGORIES.forEach(cat => {
+    const list = S.characters.filter(c => (c.category || 'main') === cat.id);
+    const group = document.createElement('div');
+    group.className = 'char-group';
+
+    const header = document.createElement('div');
+    header.className = 'char-group-header';
+    header.innerHTML = `
+      <span class="char-group-label">${cat.label} (${list.length})</span>
+      <button class="char-group-add" data-cat="${cat.id}">+ añadir</button>`;
+    group.appendChild(header);
+
+    const tabs = document.createElement('div');
+    tabs.className = 'char-group-tabs';
+    list.forEach(c => {
+      const isActive = c.id === S.ui.openCharId;
+      const isExpanded = !!S.ui.expandedChars[c.id];
+
+      const tab = document.createElement('button');
+      tab.className = 'char-tab' + (isActive ? ' active' : '');
+      tab.style.display = 'inline-flex';
+      tab.style.alignItems = 'center';
+      tab.style.gap = '6px';
+      tab.innerHTML = `
+        <span class="char-tab-label" data-char-open="${c.id}">${escapeHtml(c.name || 'Sin nombre')}</span>
+        <span class="char-tab-toggle" data-char-toggle="${c.id}" title="Desplegar ficha" style="opacity:.7;padding:0 2px">${isExpanded ? '▴' : '▾'}</span>`;
+      tabs.appendChild(tab);
+
+      // Bloque desplegable inline
+      if (isExpanded) {
+        const panel = document.createElement('div');
+        panel.className = 'char-inline-panel';
+        panel.setAttribute('data-char-panel', c.id);
+
+        // Campos compactos
+        const compactFields = [
+          { key: 'rol',       label: 'Rol' },
+          { key: 'objetivo',  label: 'Objetivo' },
+          { key: 'conflicto', label: 'Conflicto' },
+          { key: 'valores',   label: 'Valores' }
+        ];
+        let fieldsHtml = '';
+        compactFields.forEach(f => {
+          const val = c.short[f.key] || '';
+          fieldsHtml += `
+            <div class="field" style="margin-bottom:10px">
+              <label style="font-size:.72rem">${f.label}</label>
+              <textarea data-char="${c.id}" data-field="${f.key}" rows="2" style="font-size:.82rem">${escapeHtml(val)}</textarea>
+            </div>
+          `;
+        });
+
+        panel.innerHTML = `
+          <div style="font-size:.72rem;color:var(--text-soft);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">
+            Ficha rápida · ${escapeHtml(c.name || 'Sin nombre')}
+          </div>
+          ${fieldsHtml}
+          <div style="display:flex;gap:6px;justify-content:flex-end">
+            <button class="btn btn-ghost btn-sm" data-char-open-full="${c.id}">Abrir ficha completa</button>
+          </div>
+        `;
+        tabs.appendChild(panel);
+      }
+    });
+    if (list.length === 0) {
+      const empty = document.createElement('span');
+      empty.style.fontSize = '.75rem';
+      empty.style.color = 'var(--text-soft)';
+      empty.style.fontStyle = 'italic';
+      empty.textContent = 'Sin personajes en esta categoría.';
+      tabs.appendChild(empty);
+    }
+    group.appendChild(tabs);
+    groupsWrap.appendChild(group);
+  });
+  wrap.appendChild(groupsWrap);
+
+  // Listeners para los botones "+" de cada grupo
+  setTimeout(() => {
+    groupsWrap.querySelectorAll('.char-group-add').forEach(btn => {
+      btn.onclick = () => addCharacter(btn.dataset.cat);
+    });
+
+    // Click en el nombre del personaje → cambiar activo
+    groupsWrap.querySelectorAll('[data-char-open]').forEach(el => {
+      el.onclick = (e) => {
+        e.stopPropagation();
+        S.ui.openCharId = el.dataset.charOpen;
+        autosave();
+        render();
+      };
+    });
+
+    // Click en el toggle ▾ / ▴ → desplegar ficha inline
+    groupsWrap.querySelectorAll('[data-char-toggle]').forEach(el => {
+      el.onclick = (e) => {
+        e.stopPropagation();
+        const id = el.dataset.charToggle;
+        S.ui.expandedChars[id] = !S.ui.expandedChars[id];
+        autosave();
+        render();
+      };
+    });
+
+    // Click en "Abrir ficha completa" → cambia activo
+    groupsWrap.querySelectorAll('[data-char-open-full]').forEach(el => {
+      el.onclick = (e) => {
+        e.stopPropagation();
+        S.ui.openCharId = el.dataset.charOpenFull;
+        autosave();
+        render();
+      };
+    });
+
+    // Edición de los campos inline
+    groupsWrap.querySelectorAll('[data-char-panel]').forEach(panel => {
+      panel.addEventListener('input', (e) => {
+        const el = e.target;
+        const id = el.dataset.char;
+        const key = el.dataset.field;
+        if (!id || !key) return;
+        const c = S.characters.find(x => x.id === id);
+        if (!c) return;
+        c.short[key] = el.value;
+        markDirty();
+      });
+    });
+  }, 0);
+
+  // Ficha del personaje activo (la que ya existía)
   const current = S.characters.find(c => c.id === S.ui.openCharId) || S.characters[0];
   if (!current) {
     const empty = document.createElement('div');
@@ -509,11 +751,26 @@ function renderCharactersSection(mode) {
   const card = document.createElement('div');
   card.className = 'card';
 
-  card.appendChild(fieldBlock({
-    label: 'Nombre', key: 'name', value: current.name,
-    inputHtml: `<input type="text" value="${escapeHtml(current.name)}" data-char="${current.id}" data-field="name">`,
-    stepIdForHelp: 'char_' + current.id
-  }));
+  const headRow = document.createElement('div');
+  headRow.style.display = 'grid';
+  headRow.style.gridTemplateColumns = '2fr 1fr';
+  headRow.style.gap = '12px';
+  headRow.style.marginBottom = '14px';
+  headRow.innerHTML = `
+    <div class="field" style="margin:0">
+      <label>Nombre</label>
+      <input type="text" value="${escapeHtml(current.name)}" data-char="${current.id}" data-field="name">
+    </div>
+    <div class="field" style="margin:0">
+      <label>Categoría</label>
+      <select data-char="${current.id}" data-field="category">
+        ${CHARACTER_CATEGORIES.map(cat =>
+          `<option value="${cat.id}" ${(current.category || 'main') === cat.id ? 'selected' : ''}>${cat.label}</option>`
+        ).join('')}
+      </select>
+    </div>
+  `;
+  card.appendChild(headRow);
 
   const fields = [];
   if (mode === 'short' || S.settings.ficha === 'merged') fields.push(...SHORT_CHAR_FIELDS);
@@ -537,8 +794,12 @@ function renderCharactersSection(mode) {
   del.textContent = '🗑 Eliminar personaje';
   del.style.marginTop = '12px';
   del.onclick = () => {
-    if (!confirm(`¿Eliminar a "${current.name}"?`)) return;
+    if (!confirm(`¿Eliminar a "${current.name}"? Se quitará también de todas las escenas donde aparezca.`)) return;
     S.characters = S.characters.filter(c => c.id !== current.id);
+    S.scenes.forEach(sc => {
+      if (sc.povId === current.id) { sc.povId = ''; }
+      sc.charactersInScene = (sc.charactersInScene || []).filter(id => id !== current.id);
+    });
     S.ui.openCharId = null;
     markDirty();
     render();
@@ -560,12 +821,43 @@ function renderCharactersSection(mode) {
     if (key === 'name') renderSidebar();
   });
 
+  card.addEventListener('change', e => {
+    const el = e.target;
+    const id = el.dataset.char;
+    const key = el.dataset.field;
+    if (key === 'category' && id) {
+      const c = S.characters.find(x => x.id === id);
+      if (c) { c.category = el.value; markDirty(); render(); }
+    }
+  });
+
   wrap.appendChild(card);
   return wrap;
 }
 
+function addCharacter(category) {
+  const c = { id: uid(), name: 'Nuevo personaje', category: category || 'main', short: {}, synopsis: '', bible: {} };
+  S.characters.push(c);
+  S.ui.openCharId = c.id;
+  markDirty();
+  render();
+}
+
+/* ==========================================================
+   FIN DE LA PARTE 1/2 — A CONTINUACIÓN, PARTE 2/2
+   (escenas, exportación, modales, versiones, ajustes,
+    utilidades, eventos y arranque)
+   ========================================================== */
+
+   /* ==========================================================
+   COPO DE NIEVE — Planificador de novelas
+   PARTE 2/2: escenas, exportación, modales, versiones,
+              ajustes, utilidades, eventos y arranque.
+   Pega esta parte justo debajo de la PARTE 1/2.
+   ========================================================== */
+
 /* ----------------------------------------------------------
-   8. ESCENAS — dos vistas: 'list' y 'plan'
+   8. ESCENAS
    ---------------------------------------------------------- */
 
 function renderScenesSection(mode) {
@@ -627,18 +919,19 @@ function renderSceneTable() {
   S.scenes.forEach((sc, i) => {
     const type = effectiveSceneType(sc);
     const state = SCENE_STATES.find(s => s.id === sc.state) || SCENE_STATES[0];
+    const povLabel = resolvePovName(sc) || '—';
     const tr = document.createElement('tr');
     tr.style.cursor = 'pointer';
     tr.innerHTML = `
       <td>${i + 1}</td>
       <td>${escapeHtml(sc.title || '—')}</td>
-      <td>${escapeHtml(sc.pov || '—')}</td>
+      <td>${escapeHtml(povLabel)}</td>
       <td><span class="scene-tag ${type}">${typeLabel(type)}</span></td>
       <td><span class="badge" style="color:${state.color}">${state.label}</span></td>
       <td class="wrap">${escapeHtml((sc.summary || '').slice(0, 120))}${(sc.summary || '').length > 120 ? '…' : ''}</td>`;
     tr.onclick = () => {
       S.ui.openSceneId = sc.id;
-      S.ui.currentStep = 'p9';
+      S.ui.currentStep = 'p8';
       autosave();
       render();
       document.getElementById('content').scrollTop = 0;
@@ -651,7 +944,7 @@ function renderSceneTable() {
   const hint = document.createElement('p');
   hint.className = 'card-hint';
   hint.style.marginTop = '12px';
-  hint.textContent = 'Pulsa cualquier fila para abrir esa escena en el Plan de escenas (paso 9).';
+  hint.textContent = 'Pulsa cualquier fila para abrir esa escena en el Plan de escenas (paso 8).';
   wrap.appendChild(hint);
 
   return wrap;
@@ -672,6 +965,14 @@ function typeLabel(t) {
   return 'Sin definir';
 }
 
+function resolvePovName(sc) {
+  if (sc.povId) {
+    const c = S.characters.find(x => x.id === sc.povId);
+    if (c) return c.name;
+  }
+  return sc.povName || '';
+}
+
 function renderSceneItem(sc, index) {
   const item = document.createElement('div');
   item.className = 'scene-item' + (S.ui.openSceneId === sc.id ? ' open' : '');
@@ -680,6 +981,7 @@ function renderSceneItem(sc, index) {
 
   const state = SCENE_STATES.find(s => s.id === sc.state) || SCENE_STATES[0];
   const type = effectiveSceneType(sc);
+  const povLabel = resolvePovName(sc) || 'Sin POV';
 
   const summary = document.createElement('div');
   summary.className = 'scene-summary';
@@ -687,6 +989,7 @@ function renderSceneItem(sc, index) {
     <span class="drag-handle" title="Arrastrar para reordenar" style="cursor:grab;opacity:.5;user-select:none;padding:0 4px;">⋮⋮</span>
     <span class="scene-num">${index + 1}</span>
     <span class="scene-title ${sc.title ? '' : 'empty'}">${escapeHtml(sc.title || 'Sin título')}</span>
+    <span class="badge" style="font-size:.7rem">${escapeHtml(povLabel)}</span>
     <span class="scene-tag ${type}">${typeLabel(type)}</span>
     <select class="state-select editable-hide" data-scene-state="${sc.id}">
       ${SCENE_STATES.map(s => `<option value="${s.id}" ${s.id === sc.state ? 'selected' : ''}>${s.label}</option>`).join('')}
@@ -743,9 +1046,10 @@ function renderSceneItem(sc, index) {
   gridTop.className = 'grid-2';
   gridTop.style.marginTop = '12px';
   gridTop.appendChild(sceneField('Título', 'text', 'title', sc));
-  gridTop.appendChild(sceneField('POV', 'text', 'pov', sc));
+  gridTop.appendChild(sceneField('Lugar', 'text', 'location', sc));
   body.appendChild(gridTop);
 
+  body.appendChild(renderPovBlock(sc));
   body.appendChild(sceneField('Resumen', 'textarea', 'summary', sc, 3));
   body.appendChild(sceneField('Crisol de escena', 'textarea', 'crisol', sc, 2));
 
@@ -776,6 +1080,7 @@ function renderSceneItem(sc, index) {
     body.appendChild(sceneField('Revés / Victoria', 'textarea', 'reves', sc, 2));
   }
 
+  body.appendChild(renderCharactersInSceneBlock(sc));
   body.appendChild(sceneField('Notas', 'textarea', 'notes', sc, 2));
   body.appendChild(renderVerifier(sc));
 
@@ -816,11 +1121,15 @@ function renderSceneItem(sc, index) {
 
   item.addEventListener('change', e => {
     const el = e.target;
+
+    // Estado de escena
     const stateId = el.dataset.sceneState;
     if (stateId) {
       const sc2 = S.scenes.find(x => x.id === stateId);
       if (sc2) { sc2.state = el.value; markDirty(); render(); }
     }
+
+    // Selector de tipo
     const typeId = el.dataset.scene;
     const field = el.dataset.field;
     if (typeId && field === 'type') {
@@ -845,12 +1154,53 @@ function renderSceneItem(sc, index) {
         render();
       }
     }
+
+    // Selector de POV
+    if (typeId && field === 'povSelect') {
+      const sc2 = S.scenes.find(x => x.id === typeId);
+      if (sc2) {
+        const val = el.value;
+        if (val === '__other__') {
+          sc2.povId = '';
+          S.ui.manualPov[sc2.id] = true;
+        } else if (val === '') {
+          sc2.povId = '';
+          sc2.povName = '';
+          S.ui.manualPov[sc2.id] = false;
+        } else {
+          sc2.povId = val;
+          const c = S.characters.find(x => x.id === val);
+          sc2.povName = c ? c.name : '';
+          S.ui.manualPov[sc2.id] = false;
+        }
+        markDirty();
+        render();
+      }
+    }
+
+    // Checkboxes de personajes en escena
+    if (el.dataset.sceneChar) {
+      const scId = el.dataset.sceneChar;
+      const charId = el.dataset.charId;
+      const sc2 = S.scenes.find(x => x.id === scId);
+      if (sc2) {
+        if (!Array.isArray(sc2.charactersInScene)) sc2.charactersInScene = [];
+        if (el.checked) {
+          if (!sc2.charactersInScene.includes(charId)) sc2.charactersInScene.push(charId);
+        } else {
+          sc2.charactersInScene = sc2.charactersInScene.filter(id => id !== charId);
+        }
+        markDirty();
+        render();
+      }
+    }
   });
 
   item.addEventListener('click', e => {
     const up = e.target.closest('[data-move-up]');
     const dn = e.target.closest('[data-move-down]');
     const del = e.target.closest('[data-del-scene]');
+    const fileBtn = e.target.closest('[data-file-pov]');
     if (up) { moveScene(up.dataset.moveUp, -1); }
     if (dn) { moveScene(dn.dataset.moveDown, 1); }
     if (del) {
@@ -859,9 +1209,154 @@ function renderSceneItem(sc, index) {
         markDirty(); render();
       }
     }
+    if (fileBtn) {
+      const sc2 = S.scenes.find(x => x.id === fileBtn.dataset.filePov);
+      if (sc2 && sc2.povName && sc2.povName.trim()) {
+        const name = sc2.povName.trim();
+        const existing = S.characters.find(c => c.name.toLowerCase() === name.toLowerCase());
+        if (existing) {
+          sc2.povId = existing.id;
+          sc2.povName = existing.name;
+        } else {
+          const newChar = { id: uid(), name, category: 'main', short: {}, synopsis: '', bible: {} };
+          S.characters.push(newChar);
+          sc2.povId = newChar.id;
+        }
+        S.ui.manualPov[sc2.id] = false;
+        markDirty();
+        render();
+      }
+    }
   });
 
   return item;
+}
+
+function renderPovBlock(sc) {
+  const wrap = document.createElement('div');
+  wrap.className = 'field';
+  const manual = !!S.ui.manualPov[sc.id];
+  const hasChars = S.characters.length > 0;
+
+  let optionsHtml = `<option value="" ${!sc.povId && !manual ? 'selected' : ''}>— Sin POV —</option>`;
+  CHARACTER_CATEGORIES.forEach(cat => {
+    const list = S.characters.filter(c => (c.category || 'main') === cat.id);
+    if (list.length === 0) return;
+    optionsHtml += `<optgroup label="${cat.label}">`;
+    list.forEach(c => {
+      optionsHtml += `<option value="${c.id}" ${sc.povId === c.id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`;
+    });
+    optionsHtml += `</optgroup>`;
+  });
+  optionsHtml += `<option value="__other__" ${manual ? 'selected' : ''}>Otro (escribir a mano)</option>`;
+
+  const helpId = `scene_${sc.id}__pov`;
+  const help = FIELD_HELP.pov;
+  const isOpen = !!S.ui.helpOpen[helpId];
+
+  let manualInput = '';
+  if (manual || !hasChars) {
+    const canFile = sc.povName && sc.povName.trim() && !sc.povId;
+    manualInput = `
+      <div style="display:flex;gap:6px;align-items:center;margin-top:6px">
+        <input type="text" data-scene="${sc.id}" data-field="povName" value="${escapeHtml(sc.povName || '')}" placeholder="Nombre del POV" style="flex:1">
+        ${canFile ? `<button class="btn btn-ghost btn-sm" data-file-pov="${sc.id}" title="Fichar este nombre como personaje">➕ Fichar</button>` : ''}
+      </div>
+    `;
+  }
+
+  wrap.innerHTML = `
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
+      <label style="margin:0;flex:1">POV (punto de vista)</label>
+      <button class="field-help-btn" data-help-id="${helpId}" title="¿Qué se espera aquí?" style="background:none;border:1px solid var(--border);border-radius:50%;width:20px;height:20px;font-size:.7rem;line-height:1;cursor:pointer;color:var(--text-soft)">?</button>
+    </div>
+    <div class="pov-block">
+      <select data-scene="${sc.id}" data-field="povSelect" ${!hasChars ? 'style="display:none"' : ''}>
+        ${optionsHtml}
+      </select>
+      ${manualInput}
+    </div>
+    <div class="field-help-text" data-help-text="${helpId}" style="display:${isOpen ? 'block' : 'none'};font-size:.78rem;color:var(--text-soft);background:var(--bg-soft);padding:8px 10px;border-radius:6px;margin-top:6px;line-height:1.5;border-left:3px solid var(--accent)">${escapeHtml(help)}</div>
+  `;
+
+  setTimeout(() => {
+    const btn = wrap.querySelector(`[data-help-id="${helpId}"]`);
+    if (btn) {
+      btn.onclick = (e) => {
+        e.preventDefault();
+        S.ui.helpOpen[helpId] = !S.ui.helpOpen[helpId];
+        autosave();
+        const txt = wrap.querySelector(`[data-help-text="${helpId}"]`);
+        if (txt) txt.style.display = S.ui.helpOpen[helpId] ? 'block' : 'none';
+      };
+    }
+  }, 0);
+
+  return wrap;
+}
+
+function renderCharactersInSceneBlock(sc) {
+  const wrap = document.createElement('div');
+  wrap.className = 'field';
+
+  const helpId = `scene_${sc.id}__charactersInScene`;
+  const help = FIELD_HELP.charactersInScene;
+  const isOpen = !!S.ui.helpOpen[helpId];
+
+  const available = S.characters.filter(c => c.id !== sc.povId);
+  const selected = Array.isArray(sc.charactersInScene) ? sc.charactersInScene : [];
+
+  let listHtml = '';
+  if (available.length === 0) {
+    listHtml = `<span style="font-size:.78rem;color:var(--text-soft);font-style:italic">No hay otros personajes fichados.</span>`;
+  } else {
+    CHARACTER_CATEGORIES.forEach(cat => {
+      const list = available.filter(c => (c.category || 'main') === cat.id);
+      if (list.length === 0) return;
+      listHtml += `<div style="width:100%;font-size:.68rem;text-transform:uppercase;letter-spacing:.5px;color:var(--text-soft);margin:6px 0 2px;font-weight:600">${cat.label}</div>`;
+      list.forEach(c => {
+        const checked = selected.includes(c.id);
+        listHtml += `
+          <label class="scene-char-chip ${checked ? 'checked' : ''}">
+            <input type="checkbox" data-scene-char="${sc.id}" data-char-id="${c.id}" ${checked ? 'checked' : ''}>
+            <span>${escapeHtml(c.name)}</span>
+          </label>
+        `;
+      });
+    });
+  }
+
+  wrap.innerHTML = `
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
+      <label style="margin:0;flex:1">Personajes que aparecen (además del POV)</label>
+      <button class="field-help-btn" data-help-id="${helpId}" title="¿Qué se espera aquí?" style="background:none;border:1px solid var(--border);border-radius:50%;width:20px;height:20px;font-size:.7rem;line-height:1;cursor:pointer;color:var(--text-soft)">?</button>
+    </div>
+    <div class="scene-characters">
+      ${listHtml}
+    </div>
+    <div class="field-help-text" data-help-text="${helpId}" style="display:${isOpen ? 'block' : 'none'};font-size:.78rem;color:var(--text-soft);background:var(--bg-soft);padding:8px 10px;border-radius:6px;margin-top:6px;line-height:1.5;border-left:3px solid var(--accent)">${escapeHtml(help)}</div>
+  `;
+
+  setTimeout(() => {
+    const btn = wrap.querySelector(`[data-help-id="${helpId}"]`);
+    if (btn) {
+      btn.onclick = (e) => {
+        e.preventDefault();
+        S.ui.helpOpen[helpId] = !S.ui.helpOpen[helpId];
+        autosave();
+        const txt = wrap.querySelector(`[data-help-text="${helpId}"]`);
+        if (txt) txt.style.display = S.ui.helpOpen[helpId] ? 'block' : 'none';
+      };
+    }
+    wrap.querySelectorAll('input[type="checkbox"][data-scene-char]').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const chip = cb.closest('.scene-char-chip');
+        if (chip) chip.classList.toggle('checked', cb.checked);
+      });
+    });
+  }, 0);
+
+  return wrap;
 }
 
 function sceneField(label, type, key, sc, rows) {
@@ -907,7 +1402,10 @@ function renderVerifier(sc) {
 
 function addScene(mode) {
   const sc = {
-    id: uid(), title: '', pov: '', summary: '', type: '', crisol: '',
+    id: uid(), title: '', location: '',
+    povId: '', povName: '',
+    charactersInScene: [],
+    summary: '', type: '', crisol: '',
     meta: '', conflicto: '', reves: '',
     reaccion: '', dilema: '', decision: '',
     notes: '', state: 'pending'
@@ -950,9 +1448,9 @@ function renderFinalStep() {
   card.className = 'card';
   card.innerHTML = `
     <p style="font-size:.95rem;line-height:1.7;">
-      Ya tienes tu copo de nieve completo: público objetivo, resumen de una frase,
+      Ya tienes tu copo de nieve completo: público objetivo y premisa, resumen de una frase,
       resumen de un párrafo, fichas de personajes, sinopsis breve, sinopsis de personajes,
-      sinopsis larga, biblia de personajes, lista de escenas y plan de escenas.
+      sinopsis larga, biblia de personajes, plan de escenas y lista de escenas.
     </p>
     <p style="margin-top:12px;font-size:.95rem;line-height:1.7;">
       Es hora de escribir. Lee lo que has planeado para cada escena, y escribe.
@@ -1036,28 +1534,58 @@ function exportData() {
 
 function buildPlainText() {
   let out = `# ${S.title}\n\n`;
+
   STEPS.forEach(st => {
     out += `\n## ${st.num === 0 ? '' : 'Paso ' + st.num + ': '}${st.title}\n\n`;
+
+    if (st.type === 'publico') {
+      const d = S.steps.publico || {};
+      if (d.categoria) out += `**Categoría:** ${d.categoria}\n\n`;
+      if (d.tipo) out += `**Tipo de historia:** ${d.tipo}\n\n`;
+      if (d.porque) out += `**Por qué encantará al público:** ${d.porque}\n\n`;
+      out += `\n### 🔥 Premisa, tema y crisol general\n\n`;
+      if (d.premisa) out += `**Premisa:** ${d.premisa}\n\n`;
+      if (d.tema) out += `**Tema:** ${d.tema}\n\n`;
+      if (d.crisolGeneral) out += `**Crisol general:** ${d.crisolGeneral}\n\n`;
+      return;
+    }
+
     if (st.type === 'characters') {
-      S.characters.forEach(c => {
-        out += `### ${c.name}\n\n`;
-        const fields = [];
-        if (st.mode === 'short' || S.settings.ficha === 'merged') fields.push(...SHORT_CHAR_FIELDS);
-        if (st.mode === 'bible' || S.settings.ficha === 'merged') fields.push(...BIBLE_FIELDS);
-        fields.forEach(f => {
-          const v = c.short[f.key] || c.bible[f.key] || '';
-          if (v) out += `- **${f.label}:** ${v}\n`;
+      // Agrupar por categoría
+      CHARACTER_CATEGORIES.forEach(cat => {
+        const list = S.characters.filter(c => (c.category || 'main') === cat.id);
+        if (list.length === 0) return;
+        out += `### ${cat.label}\n\n`;
+        list.forEach(c => {
+          out += `#### ${c.name}\n\n`;
+          const fields = [];
+          if (st.mode === 'short' || S.settings.ficha === 'merged') fields.push(...SHORT_CHAR_FIELDS);
+          if (st.mode === 'bible' || S.settings.ficha === 'merged') fields.push(...BIBLE_FIELDS);
+          fields.forEach(f => {
+            const v = c.short[f.key] || c.bible[f.key] || '';
+            if (v) out += `- **${f.label}:** ${v}\n`;
+          });
+          if (c.synopsis) out += `\n${c.synopsis}\n`;
+          out += '\n';
         });
-        if (c.synopsis) out += `\n${c.synopsis}\n`;
-        out += '\n';
       });
-    } else if (st.type === 'scenes') {
+      return;
+    }
+
+    if (st.type === 'scenes') {
       if (st.mode !== 'plan') return;
       S.scenes.forEach((sc, i) => {
         const type = effectiveSceneType(sc);
         out += `### Escena ${i + 1}: ${sc.title || 'Sin título'}\n`;
-        out += `- POV: ${sc.pov || '—'}\n`;
+        const povLabel = resolvePovName(sc);
+        if (povLabel) out += `- POV: ${povLabel}\n`;
+        if (sc.location) out += `- Lugar: ${sc.location}\n`;
         out += `- Tipo: ${typeLabel(type)}\n`;
+        const others = (sc.charactersInScene || [])
+          .map(id => S.characters.find(c => c.id === id))
+          .filter(Boolean)
+          .map(c => c.name);
+        if (others.length) out += `- Aparecen: ${others.join(', ')}\n`;
         if (sc.summary) out += `\n${sc.summary}\n`;
         if (sc.crisol) out += `\n**Crisol:** ${sc.crisol}\n`;
         if (type === 'reactive') {
@@ -1069,18 +1597,24 @@ function buildPlainText() {
           if (sc.conflicto) out += `\n**Conflicto:** ${sc.conflicto}\n`;
           if (sc.reves) out += `\n**Revés:** ${sc.reves}\n`;
         }
+        if (sc.notes) out += `\n*Notas:* ${sc.notes}\n`;
         out += '\n';
       });
-    } else if (st.type === 'final') {
-      out += 'Escribe tu novela.\n\n';
-    } else {
-      const data = S.steps[st.id] || {};
-      st.fields.forEach(f => {
-        const v = data[f.key];
-        if (v) out += `**${f.label}:**\n\n${v}\n\n`;
-      });
+      return;
     }
+
+    if (st.type === 'final') {
+      out += 'Escribe tu novela.\n\n';
+      return;
+    }
+
+    const data = S.steps[st.id] || {};
+    st.fields.forEach(f => {
+      const v = data[f.key];
+      if (v) out += `**${f.label}:**\n\n${v}\n\n`;
+    });
   });
+
   return out;
 }
 
@@ -1116,6 +1650,7 @@ function exportDocx() {
         if (line.startsWith('# ')) return new Paragraph({ text: line.slice(2), heading: HeadingLevel.HEADING_1 });
         if (line.startsWith('## ')) return new Paragraph({ text: line.slice(3), heading: HeadingLevel.HEADING_2 });
         if (line.startsWith('### ')) return new Paragraph({ text: line.slice(4), heading: HeadingLevel.HEADING_3 });
+        if (line.startsWith('#### ')) return new Paragraph({ text: line.slice(5), heading: HeadingLevel.HEADING_4 });
         return new Paragraph({ children: [new TextRun(line)] });
       });
       const doc = new Document({ sections: [{ children }] });
@@ -1183,7 +1718,7 @@ function openVersions() {
         if (!confirm('¿Restaurar esta versión? Se perderán los cambios actuales.')) return;
         const data = S.versions[i].data;
         const currentVersions = S.versions;
-        S = Object.assign(DEFAULT_STATE(), data);
+        S = Object.assign(DEFAULT_STATE(), migrateState(data));
         S.versions = currentVersions;
         applySettings();
         applySidebarState();
@@ -1293,7 +1828,6 @@ function bindGlobalEvents() {
   document.querySelectorAll('[data-close-versions]').forEach(b => b.onclick = closeVersions);
   document.querySelectorAll('[data-close-modal]').forEach(b => b.onclick = closeModal);
 
-  // Sidebar colapsable
   const sidebarBtn = document.getElementById('btnSidebarToggle');
   if (sidebarBtn) {
     sidebarBtn.onclick = () => {
@@ -1309,7 +1843,7 @@ function bindGlobalEvents() {
     const reader = new FileReader();
     reader.onload = ev => {
       try {
-        const data = JSON.parse(ev.target.result);
+        const data = migrateState(JSON.parse(ev.target.result));
         saveSnapshot('Antes de abrir archivo');
         const versions = S.versions;
         S = Object.assign(DEFAULT_STATE(), data);
