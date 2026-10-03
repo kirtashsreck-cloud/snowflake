@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Copo de Nieve — Planificador de novelas</title>
+<link rel="stylesheet" href="style.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js" defer></script>
+<script src="app.js" defer></script>
+</head>
+<body data-theme="system">
+
+<div class="app">
+
+  <!-- ============ TOP BAR ============ -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-icon">❄</span>
+      <div>
+        <h1>Copo de Nieve</h1>
+        <span class="brand-sub">planificador de novelas</span>
+      </div>
+    </div>
+
+    <div class="topbar-actions">
+      <span id="fileStatus" class="file-status">Nueva historia</span>
+      <button id="btnViewToggle" class="btn btn-ghost" title="Vista guiada / completa">📖 Vista completa</button>
+      <button id="btnReadMode" class="btn btn-ghost" title="Modo solo lectura">👁 Solo lectura</button>
+      <button id="btnVersions" class="btn btn-ghost" title="Historial de versiones">🕓 Versiones</button>
+      <button id="btnSave" class="btn btn-primary">💾 Guardar</button>
+      <button id="btnOpen" class="btn btn-ghost">📂 Abrir</button>
+      <button id="btnNew" class="btn btn-ghost">✨ Nueva</button>
+      <button id="btnSettings" class="btn btn-icon" title="Ajustes">⚙️</button>
+    </div>
+  </header>
+
+  <!-- ============ LAYOUT PRINCIPAL ============ -->
+  <div class="layout">
+
+    <aside class="sidebar" id="sidebar">
+  <button id="btnSidebarToggle" class="sidebar-toggle" title="Colapsar panel">⟨</button>
+  <nav class="step-nav" id="stepNav"></nav>
+  <div class="sidebar-footer">
+    <button id="btnExport" class="btn btn-primary btn-block">📤 Exportar</button>
+  </div>
+</aside>
+
+    <!-- Contenido -->
+    <main class="content" id="content">
+      <!-- Aquí se renderiza el paso activo o la vista completa -->
+    </main>
+
+  </div>
+</div>
+
+<!-- ============ MODAL GENÉRICO ============ -->
+<div class="modal" id="modal">
+  <div class="modal-box">
+    <header class="modal-head">
+      <h3 id="modalTitle">Título</h3>
+      <button class="modal-close" data-close-modal>✕</button>
+    </header>
+    <div class="modal-body" id="modalBody"></div>
+    <footer class="modal-foot" id="modalFoot"></footer>
+  </div>
+</div>
+
+<!-- ============ MODAL DE AJUSTES ============ -->
+<div class="modal" id="settingsModal">
+  <div class="modal-box">
+    <header class="modal-head">
+      <h3>⚙️ Ajustes</h3>
+      <button class="modal-close" data-close-settings>✕</button>
+    </header>
+    <div class="modal-body">
+
+      <div class="setting-group">
+        <label>Tema</label>
+        <div class="segmented">
+          <button data-theme-set="light">☀️ Claro</button>
+          <button data-theme-set="dark">🌙 Oscuro</button>
+          <button data-theme-set="system">🖥️ Sistema</button>
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <label>Fuente principal</label>
+        <select id="setFont">
+          <option value="Inter">Inter</option>
+          <option value="Lora">Lora (serif)</option>
+          <option value="JetBrains Mono">JetBrains Mono</option>
+          <option value="system">System UI</option>
+        </select>
+      </div>
+
+      <div class="setting-group">
+        <label>Color de acento</label>
+        <input type="color" id="setAccent" value="#4a6e4a">
+      </div>
+
+      <div class="setting-group">
+        <label>Panel de ejemplos (burbuja)</label>
+        <div class="segmented">
+          <button data-bubble="tooltip">💬 Tooltip</button>
+          <button data-bubble="side">📌 Lateral</button>
+          <button data-bubble="chat">🗨 Burbuja</button>
+          <button data-bubble="off">🚫 Off</button>
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <label>Fichas de personaje</label>
+        <div class="segmented">
+          <button data-ficha="merged">Fusionadas</button>
+          <button data-ficha="split">Separadas</button>
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <label>Exportar Markdown</label>
+        <div class="segmented">
+          <button data-mdexport="single">Un solo .md</button>
+          <button data-mdexport="multi">Varios .md (zip)</button>
+        </div>
+      </div>
+
+    </div>
+    <footer class="modal-foot">
+      <button class="btn btn-primary" data-close-settings>Cerrar</button>
+    </footer>
+  </div>
+</div>
+
+<!-- ============ MODAL DE VERSIONES ============ -->
+<div class="modal" id="versionsModal">
+  <div class="modal-box">
+    <header class="modal-head">
+      <h3>🕓 Historial de versiones</h3>
+      <button class="modal-close" data-close-versions>✕</button>
+    </header>
+    <div class="modal-body" id="versionsBody"></div>
+    <footer class="modal-foot">
+      <button class="btn btn-ghost" data-close-versions>Cerrar</button>
+    </footer>
+  </div>
+</div>
+
+<!-- ============ INPUT OCULTO PARA ABRIR ============ -->
+<input type="file" id="fileInput" accept=".json" style="display:none">
+
+</body>
+</html>
