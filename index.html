@@ -13,7 +13,6 @@
 
 <div class="app">
 
-  <!-- ============ TOP BAR ============ -->
   <header class="topbar">
     <div class="brand">
       <span class="brand-icon">❄</span>
@@ -24,37 +23,38 @@
     </div>
 
     <div class="topbar-actions">
+      <button id="btnSearch" class="btn btn-ghost" title="Buscar (Ctrl+K)">🔍 Buscar</button>
+      <button id="btnManuscript" class="btn btn-ghost" title="Vista manuscrito">📜 Manuscrito</button>
+      <button id="btnCompare" class="btn btn-ghost" title="Comparar">⚖️ Comparar</button>
+      <button id="btnAnalysis" class="btn btn-ghost" title="Análisis narrativo">🧩 Análisis</button>
+      <button id="btnImport" class="btn btn-ghost" title="Importar / Fusionar">📥 Importar</button>
       <span id="fileStatus" class="file-status">Nueva historia</span>
+      <button id="btnTopbarToggle" class="btn btn-ghost btn-icon" title="Ocultar barra">▲</button>
       <button id="btnViewToggle" class="btn btn-ghost" title="Vista guiada / completa">📖 Vista completa</button>
       <button id="btnReadMode" class="btn btn-ghost" title="Modo solo lectura">👁 Solo lectura</button>
       <button id="btnVersions" class="btn btn-ghost" title="Historial de versiones">🕓 Versiones</button>
       <button id="btnSave" class="btn btn-primary">💾 Guardar</button>
       <button id="btnOpen" class="btn btn-ghost">📂 Abrir</button>
       <button id="btnNew" class="btn btn-ghost">✨ Nueva</button>
-      <button id="btnSettings" class="btn btn-icon" title="Ajustes">⚙️</button>
+      <button id="btnSettings" class="btn btn-icon" title="Ajustes (Ctrl+Shift+K)">⚙️</button>
     </div>
   </header>
 
-  <!-- ============ LAYOUT PRINCIPAL ============ -->
+  <button id="btnTopbarRestore" class="topbar-restore" title="Mostrar barra superior" style="display:none">▼</button>
+
   <div class="layout">
-
     <aside class="sidebar" id="sidebar">
-  <button id="btnSidebarToggle" class="sidebar-toggle" title="Colapsar panel">⟨</button>
-  <nav class="step-nav" id="stepNav"></nav>
-  <div class="sidebar-footer">
-    <button id="btnExport" class="btn btn-primary btn-block">📤 Exportar</button>
-  </div>
-</aside>
+      <button id="btnSidebarToggle" class="sidebar-toggle" title="Colapsar panel">⟨</button>
+      <nav class="step-nav" id="stepNav"></nav>
+      <div class="sidebar-footer">
+        <button id="btnExport" class="btn btn-primary btn-block">📤 Exportar</button>
+      </div>
+    </aside>
 
-    <!-- Contenido -->
-    <main class="content" id="content">
-      <!-- Aquí se renderiza el paso activo o la vista completa -->
-    </main>
-
+    <main class="content" id="content"></main>
   </div>
 </div>
 
-<!-- ============ MODAL GENÉRICO ============ -->
 <div class="modal" id="modal">
   <div class="modal-box">
     <header class="modal-head">
@@ -66,7 +66,6 @@
   </div>
 </div>
 
-<!-- ============ MODAL DE AJUSTES ============ -->
 <div class="modal" id="settingsModal">
   <div class="modal-box">
     <header class="modal-head">
@@ -74,7 +73,6 @@
       <button class="modal-close" data-close-settings>✕</button>
     </header>
     <div class="modal-body">
-
       <div class="setting-group">
         <label>Tema</label>
         <div class="segmented">
@@ -83,7 +81,6 @@
           <button data-theme-set="system">🖥️ Sistema</button>
         </div>
       </div>
-
       <div class="setting-group">
         <label>Fuente principal</label>
         <select id="setFont">
@@ -93,12 +90,10 @@
           <option value="system">System UI</option>
         </select>
       </div>
-
       <div class="setting-group">
         <label>Color de acento</label>
         <input type="color" id="setAccent" value="#4a6e4a">
       </div>
-
       <div class="setting-group">
         <label>Panel de ejemplos (burbuja)</label>
         <div class="segmented">
@@ -108,7 +103,6 @@
           <button data-bubble="off">🚫 Off</button>
         </div>
       </div>
-
       <div class="setting-group">
         <label>Fichas de personaje</label>
         <div class="segmented">
@@ -116,15 +110,6 @@
           <button data-ficha="split">Separadas</button>
         </div>
       </div>
-
-      <div class="setting-group">
-        <label>Exportar Markdown</label>
-        <div class="segmented">
-          <button data-mdexport="single">Un solo .md</button>
-          <button data-mdexport="multi">Varios .md (zip)</button>
-        </div>
-      </div>
-
     </div>
     <footer class="modal-foot">
       <button class="btn btn-primary" data-close-settings>Cerrar</button>
@@ -132,7 +117,6 @@
   </div>
 </div>
 
-<!-- ============ MODAL DE VERSIONES ============ -->
 <div class="modal" id="versionsModal">
   <div class="modal-box">
     <header class="modal-head">
@@ -146,8 +130,15 @@
   </div>
 </div>
 
-<!-- ============ INPUT OCULTO PARA ABRIR ============ -->
+<div id="searchOverlay" class="search-overlay" style="display:none">
+  <div class="search-box">
+    <input type="text" id="searchInput" placeholder="Buscar en personajes, escenas, etiquetas, pasos...">
+    <div id="searchResults" class="search-results"></div>
+  </div>
+</div>
+
 <input type="file" id="fileInput" accept=".json" style="display:none">
+<input type="file" id="importFileInput" accept=".json" style="display:none">
 
 </body>
 </html>

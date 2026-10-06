@@ -202,17 +202,22 @@ const DEFAULT_STATE = () => ({
     mdExport: 'single'
   },
   ui: {
-    currentStep: 'publico',
-    fullView: false,
-    readMode: false,
-    openSceneId: null,
-    openCharId: null,
-    draggingSceneId: null,
-    helpOpen: {},
-    sidebarCollapsed: false,
-    manualPov: {},
-    expandedChars: {}
-  },
+  currentStep: 'publico',
+  fullView: false,
+  readMode: false,
+  openSceneId: null,
+  openCharId: null,
+  draggingSceneId: null,
+  helpOpen: {},
+  sidebarCollapsed: false,
+  manualPov: {},
+  expandedChars: {},
+  topbarHidden: false,
+  tagFilter: '',
+  manuscriptView: false,
+  analysisView: false,
+  analysisSceneId: null
+},
   versions: []
 });
 
@@ -239,6 +244,8 @@ function migrateState(data) {
       if (!('povId' in sc)) sc.povId = '';
       if (!('povName' in sc)) sc.povName = '';
       if (!Array.isArray(sc.charactersInScene)) sc.charactersInScene = [];
+      if (!Array.isArray(sc.tags)) sc.tags = [];
+      if (!sc.analysis || typeof sc.analysis !== 'object') sc.analysis = {};
       if (!('location' in sc)) sc.location = '';
       delete sc.pov;
     });
@@ -283,7 +290,7 @@ function markDirty() { autosave(); updateFileStatus(); }
 function updateFileStatus() {
   const el = document.getElementById('fileStatus');
   if (!el) return;
-  el.textContent = S.title || 'Nueva historia';
+  el.textContent = (S.title && S.title !== 'Nueva historia') ? S.title : 'Sin título';
 }
 
 /* ----------------------------------------------------------
@@ -363,16 +370,24 @@ function render() {
   renderSidebar();
   const content = document.getElementById('content');
   content.classList.toggle('full-view', S.ui.fullView);
-  if (S.ui.fullView) {
+  content.innerHTML = '';
+
+  if (S.ui.manuscriptView) {
+    renderManuscript(content);
+  } else if (S.ui.analysisView) {
+    renderAnalysis(content);
+  } else if (S.ui.fullView) {
     renderFullView(content);
   } else {
     const st = STEPS.find(x => x.id === S.ui.currentStep) || STEPS[0];
-    content.innerHTML = '';
     content.appendChild(renderStepPage(st));
   }
+
   renderBubble();
   document.getElementById('btnViewToggle').textContent = S.ui.fullView ? '📄 Vista guiada' : '📖 Vista completa';
   document.getElementById('btnReadMode').classList.toggle('btn-primary', S.ui.readMode);
+  document.getElementById('btnManuscript').classList.toggle('btn-primary', S.ui.manuscriptView);
+  document.getElementById('btnAnalysis').classList.toggle('btn-primary', S.ui.analysisView);
 }
 
 function renderFullView(content) {
@@ -481,6 +496,29 @@ function renderPublicoSection() {
   const wrap = document.createElement('div');
   const data = S.steps.publico || {};
 
+  // Card 0: Título de la obra
+  const cardTitle = document.createElement('div');
+  cardTitle.className = 'card';
+  cardTitle.innerHTML = `
+    <div class="card-title">📖 Título de la obra</div>
+    <div class="card-hint">Cómo se llamará tu novela. Aparecerá en las exportaciones, en el manuscrito y en el nombre de los archivos.</div>
+    <div class="field" style="margin-bottom:0">
+      <input type="text" id="storyTitleInput" value="${escapeHtml(S.title === 'Nueva historia' ? '' : S.title)}" placeholder="Ej: La campanera del Diente" style="font-size:1rem;font-weight:500;padding:12px 14px">
+    </div>
+  `;
+  wrap.appendChild(cardTitle);
+
+  setTimeout(() => {
+    const inp = document.getElementById('storyTitleInput');
+    if (inp) {
+      inp.addEventListener('input', e => {
+        S.title = e.target.value.trim() || 'Nueva historia';
+        markDirty();
+        if (!S.ui.fullView) renderSidebar();
+      });
+    }
+  }, 0);
+
   // Card 1: Público objetivo
   const card1 = document.createElement('div');
   card1.className = 'card';
@@ -541,7 +579,6 @@ function renderPublicoSection() {
   wrap.appendChild(card1);
   wrap.appendChild(card2);
 
-  // Listener común para los dos cards
   wrap.addEventListener('input', e => {
     const el = e.target;
     if (el.dataset.step !== 'publico') return;
@@ -553,7 +590,6 @@ function renderPublicoSection() {
 
   return wrap;
 }
-
 /* ---------- Pasos generales (1, 2, 4, 6) ---------- */
 
 function renderFieldsCard(st) {
@@ -894,7 +930,9 @@ function renderScenesSection(mode) {
     return wrap;
   }
 
-  if (mode === 'list') {
+    if (mode === 'list') {
+    const filterBar = renderTagFilterBar();
+    if (filterBar) wrap.appendChild(filterBar);
     wrap.appendChild(renderSceneTable());
   } else {
     const list = document.createElement('div');
@@ -916,7 +954,8 @@ function renderSceneTable() {
       <th>#</th><th>Título</th><th>POV</th><th>Tipo</th><th>Estado</th><th>Resumen</th>
     </tr></thead>`;
   const tb = document.createElement('tbody');
-  S.scenes.forEach((sc, i) => {
+    S.scenes.forEach((sc, i) => {
+    if (S.ui.tagFilter && !(sc.tags || []).includes(S.ui.tagFilter)) return;
     const type = effectiveSceneType(sc);
     const state = SCENE_STATES.find(s => s.id === sc.state) || SCENE_STATES[0];
     const povLabel = resolvePovName(sc) || '—';
@@ -1049,7 +1088,8 @@ function renderSceneItem(sc, index) {
   gridTop.appendChild(sceneField('Lugar', 'text', 'location', sc));
   body.appendChild(gridTop);
 
-  body.appendChild(renderPovBlock(sc));
+    body.appendChild(renderPovBlock(sc));
+  body.appendChild(renderTagsInput(sc));
   body.appendChild(sceneField('Resumen', 'textarea', 'summary', sc, 3));
   body.appendChild(sceneField('Crisol de escena', 'textarea', 'crisol', sc, 2));
 
@@ -1401,10 +1441,12 @@ function renderVerifier(sc) {
 }
 
 function addScene(mode) {
-  const sc = {
+    const sc = {
     id: uid(), title: '', location: '',
     povId: '', povName: '',
     charactersInScene: [],
+    tags: [],
+    analysis: {},
     summary: '', type: '', crisol: '',
     meta: '', conflicto: '', reves: '',
     reaccion: '', dilema: '', decision: '',
@@ -1585,7 +1627,8 @@ function buildPlainText() {
           .map(id => S.characters.find(c => c.id === id))
           .filter(Boolean)
           .map(c => c.name);
-        if (others.length) out += `- Aparecen: ${others.join(', ')}\n`;
+                if (others.length) out += `- Aparecen: ${others.join(', ')}\n`;
+        if (sc.tags && sc.tags.length) out += `- Etiquetas: ${sc.tags.join(', ')}\n`;
         if (sc.summary) out += `\n${sc.summary}\n`;
         if (sc.crisol) out += `\n**Crisol:** ${sc.crisol}\n`;
         if (type === 'reactive') {
@@ -1618,9 +1661,14 @@ function buildPlainText() {
   return out;
 }
 
+function safeFileName() {
+  const base = (S.title && S.title !== 'Nueva historia') ? S.title : 'copo-de-nieve';
+  return base.replace(/[^a-zA-Z0-9_\-áéíóúñÁÉÍÓÚÑ ]/g, '').trim().replace(/\s+/g, '-').toLowerCase() || 'copo-de-nieve';
+}
+
 function exportMarkdown() {
   const md = buildPlainText();
-  downloadBlob(md, (S.title || 'copo-nieve') + '.md', 'text/markdown');
+  downloadBlob(md, safeFileName() + '.md', 'text/markdown');
 }
 
 function exportPDF() {
@@ -1654,17 +1702,17 @@ function exportDocx() {
         return new Paragraph({ children: [new TextRun(line)] });
       });
       const doc = new Document({ sections: [{ children }] });
-      Packer.toBlob(doc).then(blob => downloadBlob(blob, (S.title || 'copo-nieve') + '.docx'));
+            Packer.toBlob(doc).then(blob => downloadBlob(blob, safeFileName() + '.docx'));
       return;
     } catch (e) { console.warn('DOCX falló, usando fallback', e); }
   }
   const html = `<html><head><meta charset="utf-8"></head><body><pre>${escapeHtml(text)}</pre></body></html>`;
-  downloadBlob(html, (S.title || 'copo-nieve') + '.doc', 'application/msword');
+  downloadBlob(html, safeFileName() + '.doc', 'application/msword');
 }
 
 function exportJSON() {
   const data = { ...S, versions: [] };
-  downloadBlob(JSON.stringify(data, null, 2), (S.title || 'copo-nieve') + '.json', 'application/json');
+  downloadBlob(JSON.stringify(data, null, 2), safeFileName() + '.json', 'application/json');
 }
 
 /* ----------------------------------------------------------
@@ -1800,6 +1848,804 @@ function downloadBlob(content, filename, mime) {
 /* ----------------------------------------------------------
    16. EVENTOS GLOBALES
    ---------------------------------------------------------- */
+/* ----------------------------------------------------------
+   BUSCADOR GLOBAL
+   ---------------------------------------------------------- */
+
+function openSearch() {
+  document.getElementById('searchOverlay').style.display = 'flex';
+  const input = document.getElementById('searchInput');
+  input.value = '';
+  input.focus();
+  renderSearchResults('');
+}
+
+function closeSearch() {
+  document.getElementById('searchOverlay').style.display = 'none';
+}
+
+function renderSearchResults(query) {
+  const container = document.getElementById('searchResults');
+  const q = (query || '').trim().toLowerCase();
+  if (!q) {
+    container.innerHTML = `<div class="search-empty">Escribe para buscar en personajes, escenas, etiquetas y pasos.</div>`;
+    return;
+  }
+  const results = [];
+
+  S.characters.forEach(c => {
+    const hay = [c.name, c.short?.rol, c.short?.objetivo, c.short?.conflicto, c.short?.valores]
+      .filter(Boolean).join(' ').toLowerCase();
+    if (hay.includes(q)) {
+      results.push({
+        type: 'Personaje',
+        title: c.name,
+        context: c.short?.rol || 'Sin rol',
+        action: () => {
+          S.ui.openCharId = c.id;
+          S.ui.currentStep = 'p3';
+          S.ui.fullView = false;
+          closeSearch(); autosave(); render();
+        }
+      });
+    }
+  });
+
+  S.scenes.forEach((sc, i) => {
+    const povName = resolvePovName(sc) || '';
+    const tags = (sc.tags || []).join(' ');
+    const hay = [sc.title, sc.summary, sc.location, povName, sc.notes, tags,
+      sc.crisol, sc.meta, sc.conflicto, sc.reves, sc.reaccion, sc.dilema, sc.decision]
+      .filter(Boolean).join(' ').toLowerCase();
+    if (hay.includes(q)) {
+      results.push({
+        type: 'Escena ' + (i + 1),
+        title: sc.title || 'Sin título',
+        context: [povName, sc.location, sc.summary].filter(Boolean).join(' · ').slice(0, 100),
+        action: () => {
+          S.ui.openSceneId = sc.id;
+          S.ui.currentStep = 'p8';
+          S.ui.fullView = false;
+          closeSearch(); autosave(); render();
+        }
+      });
+    }
+  });
+
+  getAllTags().forEach(tag => {
+    if (tag.toLowerCase().includes(q)) {
+      const count = S.scenes.filter(s => (s.tags || []).includes(tag)).length;
+      results.push({
+        type: 'Etiqueta',
+        title: tag,
+        context: `${count} escena(s)`,
+        action: () => {
+          S.ui.currentStep = 'p9';
+          S.ui.fullView = false;
+          S.ui.tagFilter = tag;
+          closeSearch(); autosave(); render();
+        }
+      });
+    }
+  });
+
+  STEPS.forEach(st => {
+    if (st.type === 'scenes' || st.type === 'final') return;
+    if (st.type === 'publico') {
+      const d = S.steps.publico || {};
+      ['categoria','tipo','porque','premisa','tema','crisolGeneral'].forEach(k => {
+        if ((d[k] || '').toLowerCase().includes(q)) {
+          results.push({
+            type: 'Paso 0',
+            title: 'Público objetivo y premisa · ' + k,
+            context: (d[k] || '').slice(0, 100),
+            action: () => { S.ui.currentStep = 'publico'; S.ui.fullView = false; closeSearch(); autosave(); render(); }
+          });
+        }
+      });
+    } else if (st.fields) {
+      const data = S.steps[st.id] || {};
+      st.fields.forEach(f => {
+        if ((data[f.key] || '').toLowerCase().includes(q)) {
+          results.push({
+            type: 'Paso ' + st.num,
+            title: st.title + ' · ' + f.label,
+            context: (data[f.key] || '').slice(0, 100),
+            action: () => { S.ui.currentStep = st.id; S.ui.fullView = false; closeSearch(); autosave(); render(); }
+          });
+        }
+      });
+    }
+  });
+
+  if (results.length === 0) {
+    container.innerHTML = `<div class="search-empty">Sin resultados para "${escapeHtml(query)}".</div>`;
+    return;
+  }
+  container.innerHTML = results.slice(0, 40).map((r, i) => `
+    <div class="search-item" data-idx="${i}">
+      <div class="search-title">${highlight(r.title, q)}</div>
+      <div class="search-meta">${r.type} · ${highlight(r.context || '', q)}</div>
+    </div>
+  `).join('');
+  container.querySelectorAll('.search-item').forEach(el => {
+    el.onclick = () => results[+el.dataset.idx].action();
+  });
+}
+
+function highlight(text, query) {
+  if (!query || !text) return escapeHtml(text || '');
+  const escaped = escapeHtml(text);
+  const regex = new RegExp('(' + query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+  return escaped.replace(regex, '<mark>$1</mark>');
+}
+
+/* ----------------------------------------------------------
+   ETIQUETAS DE TRAMA
+   ---------------------------------------------------------- */
+
+function getAllTags() {
+  const set = new Set();
+  S.scenes.forEach(sc => (sc.tags || []).forEach(t => set.add(t)));
+  return Array.from(set).sort();
+}
+
+function renderTagsInput(sc) {
+  const wrap = document.createElement('div');
+  wrap.className = 'field';
+  const tags = sc.tags || [];
+  const helpId = `scene_${sc.id}__tags`;
+  const help = 'Etiquetas libres para clasificar la escena por trama o subtrama. Útil para filtrar en la lista de escenas.';
+  const isOpen = !!S.ui.helpOpen[helpId];
+
+  const chipsHtml = tags.map(t => `
+    <span class="tag-chip">
+      ${escapeHtml(t)}
+      <button data-tag-remove="${sc.id}" data-tag="${escapeHtml(t)}" title="Quitar">✕</button>
+    </span>`).join('');
+
+  wrap.innerHTML = `
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
+      <label style="margin:0;flex:1">Etiquetas de trama</label>
+      <button class="field-help-btn" data-help-id="${helpId}" title="¿Qué se espera aquí?" style="background:none;border:1px solid var(--border);border-radius:50%;width:20px;height:20px;font-size:.7rem;line-height:1;cursor:pointer;color:var(--text-soft)">?</button>
+    </div>
+    <div class="tags-input-wrap" data-tags-for="${sc.id}">
+      ${chipsHtml}
+      <input type="text" data-tag-input="${sc.id}" placeholder="Añadir etiqueta...">
+    </div>
+    <div class="field-help-text" data-help-text="${helpId}" style="display:${isOpen ? 'block' : 'none'};font-size:.78rem;color:var(--text-soft);background:var(--bg-soft);padding:8px 10px;border-radius:6px;margin-top:6px;line-height:1.5;border-left:3px solid var(--accent)">${escapeHtml(help)}</div>`;
+
+  setTimeout(() => {
+    const btn = wrap.querySelector(`[data-help-id="${helpId}"]`);
+    if (btn) btn.onclick = (e) => {
+      e.preventDefault();
+      S.ui.helpOpen[helpId] = !S.ui.helpOpen[helpId];
+      autosave();
+      const txt = wrap.querySelector(`[data-help-text="${helpId}"]`);
+      if (txt) txt.style.display = S.ui.helpOpen[helpId] ? 'block' : 'none';
+    };
+
+    const input = wrap.querySelector(`[data-tag-input="${sc.id}"]`);
+    if (input) {
+      const listId = 'tagslist_' + sc.id;
+      input.setAttribute('list', listId);
+      const datalist = document.createElement('datalist');
+      datalist.id = listId;
+      datalist.innerHTML = getAllTags().filter(t => !tags.includes(t)).map(t => `<option value="${escapeHtml(t)}">`).join('');
+      wrap.appendChild(datalist);
+
+      input.addEventListener('keydown', e => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const val = input.value.trim();
+          if (!val) return;
+          if (!sc.tags) sc.tags = [];
+          if (!sc.tags.includes(val)) { sc.tags.push(val); markDirty(); render(); }
+        } else if (e.key === 'Backspace' && input.value === '' && sc.tags && sc.tags.length > 0) {
+          sc.tags.pop(); markDirty(); render();
+        }
+      });
+    }
+
+    wrap.querySelectorAll('[data-tag-remove]').forEach(b => {
+      b.onclick = (e) => {
+        e.preventDefault();
+        const sc2 = S.scenes.find(x => x.id === b.dataset.tagRemove);
+        if (sc2 && sc2.tags) { sc2.tags = sc2.tags.filter(t => t !== b.dataset.tag); markDirty(); render(); }
+      };
+    });
+  }, 0);
+  return wrap;
+}
+
+function renderTagFilterBar() {
+  const allTags = getAllTags();
+  if (allTags.length === 0) return null;
+  const bar = document.createElement('div');
+  bar.className = 'tag-filter-bar';
+  const current = S.ui.tagFilter || '';
+  bar.innerHTML = `
+    <span class="tag-filter-label">Filtrar:</span>
+    <button class="tag-filter-chip ${!current ? 'active' : ''}" data-tag-filter="">Todas</button>
+    ${allTags.map(t => `<button class="tag-filter-chip ${current === t ? 'active' : ''}" data-tag-filter="${escapeHtml(t)}">${escapeHtml(t)}</button>`).join('')}`;
+  bar.querySelectorAll('[data-tag-filter]').forEach(b => {
+    b.onclick = () => { S.ui.tagFilter = b.dataset.tagFilter; autosave(); render(); };
+  });
+  return bar;
+}
+
+/* ----------------------------------------------------------
+   BARRA SUPERIOR OCULTABLE
+   ---------------------------------------------------------- */
+
+function applyTopbarState() {
+  const app = document.querySelector('.app');
+  if (!app) return;
+  app.classList.toggle('topbar-hidden', !!S.ui.topbarHidden);
+  const btn = document.getElementById('btnTopbarToggle');
+  if (btn) btn.textContent = S.ui.topbarHidden ? '▼' : '▲';
+  const restore = document.getElementById('btnTopbarRestore');
+  if (restore) restore.style.display = S.ui.topbarHidden ? 'flex' : 'none';
+}
+
+/* ----------------------------------------------------------
+   VISTA MANUSCRITO
+   ---------------------------------------------------------- */
+
+function toggleManuscript() {
+  S.ui.manuscriptView = !S.ui.manuscriptView;
+  if (S.ui.manuscriptView) {
+    S.ui.fullView = false;
+    S.ui.analysisView = false;
+  }
+  autosave();
+  render();
+}
+
+function renderManuscript(content) {
+  content.innerHTML = '';
+  const page = document.createElement('div');
+  page.className = 'manuscript-page';
+
+  const head = document.createElement('div');
+  head.className = 'step-head';
+  head.innerHTML = `
+    <div class="step-eyebrow">Vista manuscrito</div>
+        <h2>${escapeHtml(S.title && S.title !== 'Nueva historia' ? S.title : 'Sin título')}</h2>
+    <p>${S.scenes.length} escena(s) · Solo resumen y notas</p>`;
+  page.appendChild(head);
+
+  const toolbar = document.createElement('div');
+  toolbar.style.display = 'flex';
+  toolbar.style.gap = '8px';
+  toolbar.style.marginBottom = '24px';
+  toolbar.innerHTML = `
+    <button class="btn btn-primary btn-sm" id="exportManuscriptBtn">📤 Exportar manuscrito</button>
+    <button class="btn btn-ghost btn-sm" id="exitManuscriptBtn">✕ Cerrar</button>`;
+  page.appendChild(toolbar);
+  setTimeout(() => {
+    document.getElementById('exportManuscriptBtn').onclick = exportManuscript;
+    document.getElementById('exitManuscriptBtn').onclick = toggleManuscript;
+  }, 0);
+
+  if (S.scenes.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'card';
+    empty.innerHTML = `<p class="card-hint">Aún no hay escenas. Añádelas en el paso 8.</p>`;
+    page.appendChild(empty);
+    content.appendChild(page);
+    return;
+  }
+
+  S.scenes.forEach((sc, i) => {
+    const state = SCENE_STATES.find(s => s.id === sc.state) || SCENE_STATES[0];
+    const block = document.createElement('div');
+    block.className = 'manuscript-scene';
+    const povLabel = resolvePovName(sc) || '';
+    const metaParts = [povLabel, sc.location].filter(Boolean);
+    block.innerHTML = `
+      <div class="manuscript-scene-head">
+        <span class="mnum">${i + 1}</span>
+        <span class="mstate" style="background:${state.color}" title="${state.label}"></span>
+        <span>${state.label}</span>
+      </div>
+      <div class="manuscript-title">${escapeHtml(sc.title || 'Sin título')}</div>
+      ${metaParts.length ? `<div class="manuscript-meta">${escapeHtml(metaParts.join(' · '))}</div>` : ''}
+      ${sc.summary ? `<div class="manuscript-summary">${escapeHtml(sc.summary)}</div>` : '<div class="manuscript-summary" style="color:var(--text-soft);font-style:italic">Sin resumen.</div>'}
+      ${sc.notes ? `<div class="manuscript-notes">${escapeHtml(sc.notes)}</div>` : ''}
+      ${(sc.tags && sc.tags.length) ? `<div class="manuscript-tags">${sc.tags.map(t => `<span class="tag-chip">${escapeHtml(t)}</span>`).join('')}</div>` : ''}`;
+    page.appendChild(block);
+  });
+
+  content.appendChild(page);
+}
+
+function exportManuscript() {
+  let out = `# ${S.title}\n\n`;
+  S.scenes.forEach((sc, i) => {
+    const state = SCENE_STATES.find(s => s.id === sc.state) || SCENE_STATES[0];
+    const povLabel = resolvePovName(sc) || '';
+    out += `## Escena ${i + 1}: ${sc.title || 'Sin título'}\n\n`;
+    out += `*${state.label}${povLabel ? ' · ' + povLabel : ''}${sc.location ? ' · ' + sc.location : ''}*\n\n`;
+    if (sc.summary) out += `${sc.summary}\n\n`;
+    if (sc.notes) out += `> ${sc.notes.replace(/\n/g, '\n> ')}\n\n`;
+    if (sc.tags && sc.tags.length) out += `Etiquetas: ${sc.tags.join(', ')}\n\n`;
+    out += `---\n\n`;
+  });
+    downloadBlob(out, safeFileName() + '-manuscrito.md', 'text/markdown');
+}
+
+/* ----------------------------------------------------------
+   MODO COMPARACIÓN
+   ---------------------------------------------------------- */
+
+function openCompare() {
+  showModal('⚖️ Comparar', '', [
+    { label: 'Cerrar', cls: 'btn-ghost', fn: closeModal }
+  ]);
+  const body = document.getElementById('modalBody');
+  const foot = document.getElementById('modalFoot');
+  foot.innerHTML = '';
+
+  body.innerHTML = `
+    <div class="segmented" style="margin-bottom:16px">
+      <button id="cmpTabChars" class="active">Personajes</button>
+      <button id="cmpTabScenes">Escenas</button>
+    </div>
+    <div id="cmpBody"></div>`;
+
+  let mode = 'characters';
+  const renderCmp = () => {
+    const cmpBody = document.getElementById('cmpBody');
+    if (mode === 'characters') {
+      if (S.characters.length < 2) {
+        cmpBody.innerHTML = `<p class="card-hint">Necesitas al menos 2 personajes para comparar.</p>`;
+        return;
+      }
+      const opts = S.characters.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+      cmpBody.innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+          <select id="cmpLeft">${opts}</select>
+          <select id="cmpRight">${opts}</select>
+        </div>
+        <div class="compare-grid" id="cmpGrid"></div>`;
+      const left = document.getElementById('cmpLeft');
+      const right = document.getElementById('cmpRight');
+      left.selectedIndex = 0;
+      right.selectedIndex = 1;
+      const update = () => {
+        const a = S.characters.find(c => c.id === left.value);
+        const b = S.characters.find(c => c.id === right.value);
+        renderCharacterCompare(a, b);
+      };
+      left.onchange = update;
+      right.onchange = update;
+      update();
+    } else {
+      if (S.scenes.length < 2) {
+        cmpBody.innerHTML = `<p class="card-hint">Necesitas al menos 2 escenas para comparar.</p>`;
+        return;
+      }
+      const opts = S.scenes.map((sc, i) => `<option value="${sc.id}">${i + 1}. ${escapeHtml(sc.title || 'Sin título')}</option>`).join('');
+      cmpBody.innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+          <select id="cmpLeft">${opts}</select>
+          <select id="cmpRight">${opts}</select>
+        </div>
+        <div class="compare-grid" id="cmpGrid"></div>`;
+      const left = document.getElementById('cmpLeft');
+      const right = document.getElementById('cmpRight');
+      left.selectedIndex = 0;
+      right.selectedIndex = 1;
+      const update = () => {
+        const a = S.scenes.find(s => s.id === left.value);
+        const b = S.scenes.find(s => s.id === right.value);
+        renderSceneCompare(a, b);
+      };
+      left.onchange = update;
+      right.onchange = update;
+      update();
+    }
+  };
+
+  document.getElementById('cmpTabChars').onclick = () => {
+    mode = 'characters';
+    document.getElementById('cmpTabChars').classList.add('active');
+    document.getElementById('cmpTabScenes').classList.remove('active');
+    renderCmp();
+  };
+  document.getElementById('cmpTabScenes').onclick = () => {
+    mode = 'scenes';
+    document.getElementById('cmpTabScenes').classList.add('active');
+    document.getElementById('cmpTabChars').classList.remove('active');
+    renderCmp();
+  };
+  renderCmp();
+}
+
+function renderCompareRow(label, aVal, bVal) {
+  const same = (aVal || '').trim() === (bVal || '').trim();
+  return `
+    <div class="compare-field ${same ? 'same' : 'diff'}">
+      <div class="compare-label">${escapeHtml(label)}</div>
+      <div class="compare-value">${aVal ? escapeHtml(aVal) : '<span class="compare-empty">—</span>'}</div>
+    </div>`;
+}
+
+function renderCompareRowB(label, aVal, bVal) {
+  const same = (aVal || '').trim() === (bVal || '').trim();
+  return `
+    <div class="compare-field ${same ? 'same' : 'diff'}">
+      <div class="compare-label">${escapeHtml(label)}</div>
+      <div class="compare-value">${bVal ? escapeHtml(bVal) : '<span class="compare-empty">—</span>'}</div>
+    </div>`;
+}
+
+function renderCharacterCompare(a, b) {
+  if (!a || !b) return;
+  const grid = document.getElementById('cmpGrid');
+  const fields = [
+    ['Rol', a.short?.rol, b.short?.rol],
+    ['Objetivo', a.short?.objetivo, b.short?.objetivo],
+    ['Ambición', a.short?.ambicion, b.short?.ambicion],
+    ['Valores', a.short?.valores, b.short?.valores],
+    ['Conflicto', a.short?.conflicto, b.short?.conflicto],
+    ['Epifanía', a.short?.epifania, b.short?.epifania],
+    ['Resumen en 1 frase', a.short?.resumen1, b.short?.resumen1]
+  ];
+  grid.innerHTML = `
+    <div class="compare-col">
+      <h4>${escapeHtml(a.name)}</h4>
+      ${fields.map(([l, av]) => renderCompareRow(l, av, b.short?.[l.toLowerCase()] || '')).join('')}
+    </div>
+    <div class="compare-col">
+      <h4>${escapeHtml(b.name)}</h4>
+      ${fields.map(([l, av, bv]) => renderCompareRowB(l, av, bv)).join('')}
+    </div>`;
+}
+
+function renderSceneCompare(a, b) {
+  if (!a || !b) return;
+  const grid = document.getElementById('cmpGrid');
+  const aType = typeLabel(effectiveSceneType(a));
+  const bType = typeLabel(effectiveSceneType(b));
+  const fields = [
+    ['Título', a.title, b.title],
+    ['POV', resolvePovName(a), resolvePovName(b)],
+    ['Lugar', a.location, b.location],
+    ['Resumen', a.summary, b.summary],
+    ['Tipo', aType, bType],
+    ['Crisol', a.crisol, b.crisol],
+    ['Etiquetas', (a.tags || []).join(', '), (b.tags || []).join(', ')]
+  ];
+  grid.innerHTML = `
+    <div class="compare-col">
+      <h4>${escapeHtml(a.title || 'Sin título')}</h4>
+      ${fields.map(([l, av, bv]) => renderCompareRow(l, av, bv)).join('')}
+    </div>
+    <div class="compare-col">
+      <h4>${escapeHtml(b.title || 'Sin título')}</h4>
+      ${fields.map(([l, av, bv]) => renderCompareRowB(l, av, bv)).join('')}
+    </div>`;
+}
+
+/* ----------------------------------------------------------
+   ANÁLISIS NARRATIVO
+   ---------------------------------------------------------- */
+
+function toggleAnalysis() {
+  S.ui.analysisView = !S.ui.analysisView;
+  if (S.ui.analysisView) {
+    S.ui.fullView = false;
+    S.ui.manuscriptView = false;
+  }
+  autosave();
+  render();
+}
+
+function renderAnalysis(content) {
+  content.innerHTML = '';
+  const page = document.createElement('div');
+  page.className = 'analysis-page';
+
+  const head = document.createElement('div');
+  head.className = 'step-head';
+  head.innerHTML = `
+    <div class="step-eyebrow">Análisis narrativo</div>
+    <h2>Composición de una escena</h2>
+    <p>Integración trama/personaje/mundo, ficha de conflicto, test de lógica, semilla y pago, ritmo y subtexto.</p>`;
+  page.appendChild(head);
+
+  const toolbar = document.createElement('div');
+  toolbar.style.display = 'flex';
+  toolbar.style.gap = '8px';
+  toolbar.style.marginBottom = '20px';
+  toolbar.innerHTML = `
+    <select id="analysisSceneSelect" style="flex:1;padding:8px 12px;background:var(--bg-soft);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:.88rem"></select>
+    <button class="btn btn-ghost btn-sm" id="exitAnalysisBtn">✕ Cerrar</button>`;
+  page.appendChild(toolbar);
+
+  if (S.scenes.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'card';
+    empty.innerHTML = `<p class="card-hint">Aún no hay escenas. Añádelas en el paso 8.</p>`;
+    page.appendChild(empty);
+    content.appendChild(page);
+    return;
+  }
+
+  const select = page.querySelector('#analysisSceneSelect');
+  select.innerHTML = S.scenes.map((sc, i) =>
+    `<option value="${sc.id}" ${S.ui.analysisSceneId === sc.id ? 'selected' : ''}>${i + 1}. ${escapeHtml(sc.title || 'Sin título')}</option>`
+  ).join('');
+
+  if (!S.ui.analysisSceneId || !S.scenes.find(s => s.id === S.ui.analysisSceneId)) {
+    S.ui.analysisSceneId = S.scenes[0].id;
+    select.value = S.scenes[0].id;
+  }
+
+  const sc = S.scenes.find(x => x.id === S.ui.analysisSceneId);
+
+  if (!sc.analysis) sc.analysis = {};
+
+  const sections = renderAnalysisSections(sc);
+  sections.forEach(s => page.appendChild(s));
+
+  page.querySelector('#exitAnalysisBtn').onclick = toggleAnalysis;
+  select.onchange = e => {
+    S.ui.analysisSceneId = e.target.value;
+    autosave();
+    render();
+  };
+
+  content.appendChild(page);
+}
+
+function renderAnalysisSections(sc) {
+  const an = sc.analysis || {};
+
+  // Helper: crea una sección con N campos
+  const makeSection = (title, hint, fields) => {
+    const sec = document.createElement('div');
+    sec.className = 'analysis-section';
+    sec.innerHTML = `<h3>${title}</h3><div class="analysis-hint">${hint}</div>`;
+    fields.forEach(f => {
+      const wrap = document.createElement('div');
+      wrap.className = 'field';
+      const val = an[f.key] || '';
+      wrap.innerHTML = `
+        <label>${escapeHtml(f.label)}</label>
+        <textarea data-an="${sc.id}" data-ankey="${f.key}" rows="${f.rows || 3}" placeholder="${escapeHtml(f.ph || '')}">${escapeHtml(val)}</textarea>`;
+      sec.appendChild(wrap);
+    });
+    sec.addEventListener('input', e => {
+      const el = e.target;
+      if (!el.dataset.ankey) return;
+      const sc2 = S.scenes.find(x => x.id === el.dataset.an);
+      if (!sc2) return;
+      if (!sc2.analysis) sc2.analysis = {};
+      sc2.analysis[el.dataset.ankey] = el.value;
+      markDirty();
+    });
+    return sec;
+  };
+
+  const sections = [];
+
+  // 1. Integración
+  sections.push(makeSection(
+    '🧩 Integración trama / personaje / mundo',
+    'La clave es que cada capa empuje a la siguiente. Un dato del mundo provoca una percepción del personaje, y esa percepción desencadena una acción que mueve la trama.',
+    [
+      { key: 'intTrama',   label: 'Trama: ¿qué avanza?',            ph: 'Qué hecho nuevo mueve la historia hacia adelante.' },
+      { key: 'intPers',    label: 'Personaje: ¿qué revela?',        ph: 'Qué se descubre sobre sus deseos, miedos, valores o contradicciones.' },
+      { key: 'intMundo',   label: 'Mundo: ¿qué muestra?',           ph: 'Qué regla, costumbre o detalle del entorno entra en juego.' },
+      { key: 'intEncad',   label: 'Encadenamiento',                  ph: 'Cómo una capa empuja a la siguiente en el mismo movimiento.' }
+    ]
+  ));
+
+  // 2. Ficha de conflicto
+  sections.push(makeSection(
+    '⚔️ Ficha de conflicto',
+    'Cada personaje actúa por una razón propia y creíble. El antagonista no es malvado: tiene su lógica.',
+    [
+      { key: 'conProtQuien',  label: 'Protagonista: quién',           rows: 1 },
+      { key: 'conProtQuiere', label: 'Protagonista: qué quiere',      rows: 2 },
+      { key: 'conProtAhora',  label: 'Protagonista: por qué ahora',   rows: 2 },
+      { key: 'conProtDecid',  label: 'Protagonista: qué decisión activa toma', rows: 2 },
+      { key: 'conAntQuien',   label: 'Antagonista: quién',            rows: 1 },
+      { key: 'conAntQuiere',  label: 'Antagonista: qué quiere',       rows: 2 },
+      { key: 'conAntRazon',   label: 'Antagonista: por qué',          rows: 2 },
+      { key: 'conAntLogica',  label: 'Antagonista: su lógica',        rows: 2 },
+      { key: 'conReglas',     label: 'Reglas del mundo que intervienen', rows: 3 },
+      { key: 'conRiesgo',     label: 'Qué se arriesga',                rows: 3 },
+      { key: 'conGiro',       label: 'Giro o descubrimiento',          rows: 3 }
+    ]
+  ));
+
+  // 3. Test de lógica (checkboxes + textarea)
+  sections.push(renderLogicTest(sc, an));
+
+  // 4. Semilla y pago
+  sections.push(makeSection(
+    '🌱 Semilla y pago',
+    'Un detalle que parece ordinario al inicio reaparece al final con otro sentido. No es decorativo, es una trampa.',
+    [
+      { key: 'semSemilla', label: 'Qué se siembra',                  rows: 2 },
+      { key: 'semPago',    label: 'Dónde / cómo se paga',            rows: 2 }
+    ]
+  ));
+
+  // 5. Ritmo y puntuación
+  sections.push(makeSection(
+    '🎵 Ritmo y puntuación',
+    'Oración larga para inmersión, media para conectar, corta para el golpe. Dos puntos para soltar una regla del mundo. Máximo una o dos oraciones muy cortas por párrafo.',
+    [
+      { key: 'ritEj1', label: 'Ejemplo 1: cita del texto + efecto',  rows: 3 },
+      { key: 'ritEj2', label: 'Ejemplo 2: cita del texto + efecto',  rows: 3 }
+    ]
+  ));
+
+  // 6. Subtexto
+  sections.push(makeSection(
+    '💬 Subtexto',
+    'Cada personaje quiere algo distinto de la conversación y no lo dice directamente.',
+    [
+      { key: 'subProt', label: 'Qué quiere el protagonista sin decirlo', rows: 2 },
+      { key: 'subAnt',  label: 'Qué quiere el antagonista sin decirlo',  rows: 2 },
+      { key: 'subMundo', label: 'Cómo el mundo se filtra en lo que se dice y se calla', rows: 2 }
+    ]
+  ));
+
+  // 7. Dato de mundo descartado
+  sections.push(makeSection(
+    '🗑 Dato de mundo descartado',
+    'Un dato que quitaste por no presionar la acción ni revelar al personaje. Solo decoraba.',
+    [
+      { key: 'descDato', label: 'Qué dato descartaste y por qué', rows: 3 }
+    ]
+  ));
+
+  return sections;
+}
+
+function renderLogicTest(sc, an) {
+  const sec = document.createElement('div');
+  sec.className = 'analysis-section';
+  sec.innerHTML = `
+    <h3>🧠 Test de lógica</h3>
+    <div class="analysis-hint">Cinco preguntas para verificar que la escena se sostiene sin trampas.</div>`;
+
+  const questions = [
+    { key: 'logA', q: '¿Cada personaje actúa por una razón propia y creíble?' },
+    { key: 'logB', q: 'Si quito el giro final, ¿la escena sigue teniendo sentido y tensión?' },
+    { key: 'logC', q: '¿Existe una solución más simple? ¿Por qué no la toma?' },
+    { key: 'logD', q: '¿Alguna regla del mundo se contradice?' },
+    { key: 'logE', q: '¿La consecuencia final tiene causa clara?' }
+  ];
+
+  questions.forEach(q => {
+    const item = document.createElement('div');
+    item.className = 'analysis-logic-item';
+    const checked = !!an[q.key + '_ok'];
+    const comment = an[q.key + '_txt'] || '';
+    item.innerHTML = `
+      <input type="checkbox" data-an="${sc.id}" data-ankey="${q.key}_ok" ${checked ? 'checked' : ''}>
+      <div class="logic-content">
+        <div class="logic-question">${q.q}</div>
+        <textarea data-an="${sc.id}" data-ankey="${q.key}_txt" rows="2" placeholder="Explicación o caso concreto...">${escapeHtml(comment)}</textarea>
+      </div>`;
+    sec.appendChild(item);
+  });
+
+  sec.addEventListener('input', e => {
+    const el = e.target;
+    if (!el.dataset.ankey) return;
+    const sc2 = S.scenes.find(x => x.id === el.dataset.an);
+    if (!sc2) return;
+    if (!sc2.analysis) sc2.analysis = {};
+    if (el.type === 'checkbox') sc2.analysis[el.dataset.ankey] = el.checked;
+    else sc2.analysis[el.dataset.ankey] = el.value;
+    markDirty();
+  });
+
+  return sec;
+}
+
+/* ----------------------------------------------------------
+   IMPORTAR / FUSIONAR JSON
+   ---------------------------------------------------------- */
+
+function openImport() {
+  document.getElementById('importFileInput').click();
+}
+
+function importFromJSON(file) {
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const raw = JSON.parse(ev.target.result);
+      const valid = validateImport(raw);
+      if (!valid.ok) {
+        alert('❌ El archivo no parece ser de esta app.\n\nDetalle: ' + valid.reason);
+        return;
+      }
+      const mode = prompt(
+        '¿Cómo quieres importar?\n\n' +
+        'escribe "fusionar" para añadir al proyecto actual sin borrar nada\n' +
+        'escribe "reemplazar" para sustituir todo el proyecto actual',
+        'fusionar'
+      );
+      if (!mode) return;
+      const m = mode.toLowerCase().trim();
+      if (m === 'reemplazar') {
+        if (!confirm('⚠️ Se borrará tu proyecto actual y se cargará el del archivo. ¿Continuar?')) return;
+        saveSnapshot('Antes de importar (reemplazar)');
+        const versions = S.versions;
+        S = Object.assign(DEFAULT_STATE(), migrateState(raw));
+        S.versions = versions;
+        applySettings(); applySidebarState(); applyTopbarState();
+        autosave(); render();
+        alert('✅ Proyecto reemplazado.');
+      } else if (m === 'fusionar') {
+        saveSnapshot('Antes de importar (fusionar)');
+        mergeImport(raw);
+        autosave(); render();
+        alert('✅ Datos fusionados.');
+      } else {
+        alert('Opción no reconocida. No se hizo nada.');
+      }
+    } catch (err) {
+      alert('❌ Error al parsear el archivo: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function validateImport(data) {
+  if (!data || typeof data !== 'object') return { ok: false, reason: 'no es un objeto JSON' };
+  const hasAny = ['steps', 'characters', 'scenes'].some(k => k in data);
+  if (!hasAny) return { ok: false, reason: 'no tiene campos de la app (steps, characters, scenes)' };
+  return { ok: true };
+}
+
+function mergeImport(data) {
+  // Pasos generales: solo rellenar vacíos
+  if (data.steps) {
+    Object.keys(data.steps).forEach(stepId => {
+      if (!S.steps[stepId]) S.steps[stepId] = {};
+      Object.keys(data.steps[stepId]).forEach(k => {
+        if (!S.steps[stepId][k]) S.steps[stepId][k] = data.steps[stepId][k];
+      });
+    });
+  }
+
+  // Personajes: renombrar IDs si chocan
+  const idMap = {};
+  if (Array.isArray(data.characters)) {
+    data.characters.forEach(c => {
+      let newId = c.id;
+      if (S.characters.find(x => x.id === newId)) newId = uid();
+      idMap[c.id] = newId;
+      S.characters.push({ ...c, id: newId });
+    });
+  }
+
+  // Escenas: renombrar IDs y actualizar referencias a personajes
+  if (Array.isArray(data.scenes)) {
+    data.scenes.forEach(sc => {
+      let newId = sc.id;
+      if (S.scenes.find(x => x.id === newId)) newId = uid();
+      const newSc = { ...sc, id: newId };
+      if (newSc.povId && idMap[newSc.povId]) newSc.povId = idMap[newSc.povId];
+      if (Array.isArray(newSc.charactersInScene)) {
+        newSc.charactersInScene = newSc.charactersInScene.map(id => idMap[id] || id);
+      }
+      S.scenes.push(newSc);
+    });
+  }
+}
+
 
 function bindGlobalEvents() {
   document.getElementById('btnViewToggle').onclick = toggleFullView;
@@ -1877,19 +2723,60 @@ function bindGlobalEvents() {
     b.onclick = () => { S.settings.mdExport = b.dataset.mdexport; applySettings(); autosave(); };
   });
 
+    // Buscador
+  document.getElementById('btnSearch').onclick = openSearch;
+  const searchInput = document.getElementById('searchInput');
+  if (searchInput) searchInput.addEventListener('input', e => renderSearchResults(e.target.value));
+  const searchOverlay = document.getElementById('searchOverlay');
+  if (searchOverlay) searchOverlay.addEventListener('click', e => {
+    if (e.target === searchOverlay) closeSearch();
+  });
+
+  // Vista manuscrito
+  document.getElementById('btnManuscript').onclick = toggleManuscript;
+
+  // Análisis narrativo
+  document.getElementById('btnAnalysis').onclick = toggleAnalysis;
+
+  // Comparar
+  document.getElementById('btnCompare').onclick = openCompare;
+
+  // Importar
+  document.getElementById('btnImport').onclick = openImport;
+  const importInput = document.getElementById('importFileInput');
+  if (importInput) {
+    importInput.onchange = e => {
+      const f = e.target.files[0];
+      if (f) importFromJSON(f);
+      e.target.value = '';
+    };
+  }
+
+  // Barra superior ocultable
+  const topToggle = document.getElementById('btnTopbarToggle');
+  if (topToggle) topToggle.onclick = () => {
+    S.ui.topbarHidden = true; autosave(); applyTopbarState();
+  };
+  const topRestore = document.getElementById('btnTopbarRestore');
+  if (topRestore) topRestore.onclick = () => {
+    S.ui.topbarHidden = false; autosave(); applyTopbarState();
+  };
+
   document.querySelectorAll('.modal').forEach(m => {
     m.addEventListener('click', e => {
       if (e.target === m) m.classList.remove('open');
     });
   });
 
-  document.addEventListener('keydown', e => {
+    document.addEventListener('keydown', e => {
     if (e.ctrlKey || e.metaKey) {
       if (e.key === 's') { e.preventDefault(); document.getElementById('btnSave').click(); }
-      if (e.key === 'k') { e.preventDefault(); document.getElementById('btnSettings').click(); }
+      if (e.key === 'k' && !e.shiftKey) { e.preventDefault(); openSearch(); }
+      if (e.key === 'K' && e.shiftKey) { e.preventDefault(); document.getElementById('btnSettings').click(); }
     }
     if (e.key === 'Escape') {
       document.querySelectorAll('.modal.open').forEach(m => m.classList.remove('open'));
+      closeSearch();
     }
   });
 }
@@ -1901,6 +2788,7 @@ function bindGlobalEvents() {
 function init() {
   applySettings();
   applySidebarState();
+  applyTopbarState();
   render();
   bindGlobalEvents();
   updateFileStatus();
